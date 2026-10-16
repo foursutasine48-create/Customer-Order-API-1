@@ -1,4 +1,4 @@
-export const MAX_BOXES_PER_ORDER = 3;
+export const MAX_BOXES_PER_ORDER = 10;
 export const DEFAULT_ORDER_STATUS = "รอจัดส่ง";
 
 export interface Order {
