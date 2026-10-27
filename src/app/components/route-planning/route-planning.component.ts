@@ -1,347 +1,232 @@
 import { CommonModule } from '@angular/common';
-import {
-  AfterViewInit,
-  ChangeDetectorRef,
-  Component,
-  OnDestroy,
-  OnInit,
-} from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
-import { forkJoin, of, Subscription, switchMap } from 'rxjs';
-import * as L from 'leaflet';
+import { Router, RouterLink } from '@angular/router';
+import { finalize } from 'rxjs';
 import { CustomerOrder } from '../../models/order.model';
+import { Rider, RiderAssignment } from '../../models/rider.model';
+import { ApiService } from '../../services/api';
 import { CustomerOrderService } from '../../services/customer-order.service';
-import { RoutePlan, RoutePlanningService, RiderRoute } from '../../services/route-planning.service';
+
+const SHOP_CENTER = { latitude: 16.2467, longitude: 103.2555 };
 
 @Component({
   selector: 'app-route-planning',
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './route-planning.component.html',
-  styleUrl: './route-planning.component.css',
+  styleUrl: './route-planning.component.css'
 })
-export class RoutePlanningComponent implements OnInit, AfterViewInit, OnDestroy {
-  readonly colors = ['#7c3aed', '#0891b2', '#ea580c', '#16a34a', '#db2777', '#4f46e5'];
-  readonly maxOrdersPerRider = 3;
+export class RoutePlanningComponent implements OnInit {
+  riders: Rider[] = [];
   orders: CustomerOrder[] = [];
-  plan: RoutePlan | null = null;
-  originLatitude: number | null = 16.245;
-  originLongitude: number | null = 103.25;
-  riderCount = 2;
-  loading = false;
-  routing = false;
+  routeOrderIds: number[] = [];
+  selectedRiderId = 0;
+  assignment: RiderAssignment | null = null;
   message = '';
-
-  private map?: L.Map;
-  private routeLayer?: L.LayerGroup;
-  private ordersRequest?: Subscription;
-  private routeRequest?: Subscription;
+  loading = false;
+  calculating = false;
+  saving = false;
 
   constructor(
-    private readonly data: CustomerOrderService,
-    private readonly routePlanning: RoutePlanningService,
-    private readonly changeDetector: ChangeDetectorRef,
+    private api: ApiService,
+    private changeDetector: ChangeDetectorRef,
+    private router: Router,
+    private orderService: CustomerOrderService
   ) {}
 
-  ngOnInit(): void {
-    this.loadOrders();
-  }
-
-  ngAfterViewInit(): void {
-    this.map = L.map('routePlanningMap').setView([16.245, 103.25], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(this.map);
-    this.routeLayer = L.layerGroup().addTo(this.map);
-    this.drawRoutes();
-    setTimeout(() => this.map?.invalidateSize(), 100);
-  }
-
-  ngOnDestroy(): void {
-    this.ordersRequest?.unsubscribe();
-    this.routeRequest?.unsubscribe();
-    this.map?.remove();
-  }
-
-  get pendingOrders(): CustomerOrder[] {
-    return this.orders.filter(order =>
-      order.status !== 'จัดส่งแล้ว' && order.status !== 'ยกเลิก'
+  get availableRiders(): Rider[] {
+    return this.riders.filter(rider =>
+      rider.status === 'ว่าง' || rider.status === 'พร้อมรับงาน'
     );
   }
 
-  get routes(): RiderRoute[] {
-    return this.plan?.routes ?? [];
+  get availableOrders(): CustomerOrder[] {
+    return this.orders.filter(order =>
+      order.status !== 'กำลังจัดส่ง' &&
+      order.status !== 'จัดส่งแล้ว' &&
+      order.status !== 'ยกเลิก'
+    );
   }
 
-  loadOrders(): void {
+  get routeOrders(): CustomerOrder[] {
+    return this.routeOrderIds
+      .map(orderId => this.orders.find(order => order.order_id === orderId))
+      .filter((order): order is CustomerOrder => order !== undefined);
+  }
+
+  get estimatedDistanceKm(): number {
+    let distance = 0;
+    let previous = SHOP_CENTER;
+
+    for (const order of this.routeOrders) {
+      if (order.latitude === null || order.longitude === null) continue;
+      const current = { latitude: order.latitude, longitude: order.longitude };
+      distance += this.distanceKm(previous, current);
+      previous = current;
+    }
+
+    return Math.round(distance * 100) / 100;
+  }
+
+  ngOnInit(): void {
     this.loading = true;
-    this.ordersRequest?.unsubscribe();
-    this.ordersRequest = this.data.getOrders().subscribe({
-      next: orders => {
-        this.orders = orders;
-        this.loading = false;
+    this.api.getRiders().pipe(finalize(() => {
+      this.loading = false;
+      this.changeDetector.markForCheck();
+    })).subscribe({
+      next: riders => {
+        this.riders = riders;
+        this.selectedRiderId = this.availableRiders[0]?.rider_id ?? 0;
         this.changeDetector.markForCheck();
       },
       error: error => {
-        this.loading = false;
         this.message = CustomerOrderService.errorMessage(error);
         this.changeDetector.markForCheck();
-      },
+      }
     });
-  }
 
-  calculateRoutes(): void {
-    const origin = {
-      latitude: Number(this.originLatitude),
-      longitude: Number(this.originLongitude),
-    };
-    if (!this.validCoordinates(origin.latitude, origin.longitude)) {
-      this.message = 'กรุณาระบุพิกัดเริ่มต้นให้ถูกต้อง';
-      return;
-    }
-    if (!Number.isInteger(this.riderCount) || this.riderCount < 1 || this.riderCount > 6) {
-      this.message = 'จำนวนไรเดอร์ต้องอยู่ระหว่าง 1 ถึง 6 คน';
-      return;
-    }
-    if (this.routing) return;
-
-    const candidates = this.pendingOrders.filter(order =>
-      order.latitude !== null && order.longitude !== null &&
-      this.validCoordinates(Number(order.latitude), Number(order.longitude))
-    );
-
-    this.routeRequest?.unsubscribe();
-    this.routePlanning.clearPlan();
-    this.plan = null;
-    this.message = 'กำลังขอเส้นทางตามถนนจาก OSRM...';
-    this.drawRoutes();
-    this.routing = true;
-    this.routeRequest = this.routePlanning.getRoadDistanceMatrix(origin, candidates).pipe(
-      switchMap(distances => {
-        const routes = this.assignOrdersToRoutes(candidates, distances);
-        return routes.length
-          ? forkJoin(routes.map(route => this.routePlanning.getRoadRoute(origin, route)))
-          : of(routes);
-      }),
-    ).subscribe({
-      next: routes => {
-        const assignedOrderCount = routes.reduce((total, route) => total + route.stops.length, 0);
-        const unassignedOrders = this.pendingOrders.length - assignedOrderCount;
-        this.plan = { origin, routes, unassignedOrders };
-        this.routePlanning.setPlan(this.plan);
-        this.message = assignedOrderCount
-          ? `แบ่งออเดอร์ตามระยะทางถนนแล้ว ${assignedOrderCount} จาก ${this.pendingOrders.length} ออเดอร์ โดยจัดกลุ่มจุดส่งใกล้กัน (ไม่เกิน ${this.maxOrdersPerRider} ออเดอร์ต่อไรเดอร์)`
-          : 'ไม่มีออเดอร์ที่ยังจัดส่งและมีพิกัดให้วางแผนเส้นทาง';
-        this.routing = false;
-        this.drawRoutes();
+    this.orderService.getOrders().subscribe({
+      next: orders => {
+        this.orders = orders;
         this.changeDetector.markForCheck();
       },
       error: error => {
-        this.routing = false;
-        this.message = `ขอเส้นทางจาก OSRM ไม่สำเร็จ: ${
-          error instanceof Error ? error.message : CustomerOrderService.errorMessage(error)
-        }`;
+        this.message = CustomerOrderService.errorMessage(error);
+        this.changeDetector.markForCheck();
+      }
+    });
+  }
+
+  toggleOrder(order: CustomerOrder): void {
+    const alreadySelected = this.routeOrderIds.includes(order.order_id);
+    if (alreadySelected) {
+      this.routeOrderIds = this.routeOrderIds.filter(id => id !== order.order_id);
+      this.assignment = null;
+      return;
+    }
+
+    if (this.routeOrderIds.length >= 3) {
+      this.message = 'เลือกออเดอร์ได้ไม่เกิน 3 รายการต่อเส้นทาง';
+      return;
+    }
+    if (order.latitude === null || order.longitude === null) {
+      this.message = `ออเดอร์ #${order.order_id} ไม่มีพิกัดลูกค้า จึงคำนวณเส้นทางไม่ได้`;
+      return;
+    }
+
+    this.routeOrderIds = [...this.routeOrderIds, order.order_id];
+    this.assignment = null;
+    this.message = '';
+  }
+
+  calculateRoute(): void {
+    if (this.routeOrderIds.length === 0) {
+      this.message = 'เลือกออเดอร์อย่างน้อย 1 รายการก่อนคำนวณ';
+      return;
+    }
+
+    this.calculating = true;
+    const remaining = [...this.routeOrderIds];
+    const ordered: number[] = [];
+    let current = SHOP_CENTER;
+
+    while (remaining.length > 0) {
+      let closestIndex = 0;
+      let closestDistance = Number.POSITIVE_INFINITY;
+
+      remaining.forEach((orderId, index) => {
+        const order = this.orders.find(item => item.order_id === orderId);
+        if (!order || order.latitude === null || order.longitude === null) return;
+        const distance = this.distanceKm(current, {
+          latitude: order.latitude,
+          longitude: order.longitude
+        });
+        if (distance < closestDistance) {
+          closestIndex = index;
+          closestDistance = distance;
+        }
+      });
+
+      const [nextId] = remaining.splice(closestIndex, 1);
+      const nextOrder = this.orders.find(item => item.order_id === nextId);
+      if (nextOrder?.latitude !== null && nextOrder?.longitude !== null && nextOrder) {
+        current = { latitude: nextOrder.latitude, longitude: nextOrder.longitude };
+      }
+      ordered.push(nextId);
+    }
+
+    this.routeOrderIds = ordered;
+    this.assignment = null;
+    this.message = 'จัดลำดับจากร้านไปยังจุดที่ใกล้ที่สุดแล้ว สามารถเลื่อนลำดับเองก่อนบันทึกได้';
+    this.calculating = false;
+  }
+
+  moveStop(index: number, direction: -1 | 1): void {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= this.routeOrderIds.length) return;
+
+    const ids = [...this.routeOrderIds];
+    [ids[index], ids[newIndex]] = [ids[newIndex], ids[index]];
+    this.routeOrderIds = ids;
+    this.assignment = null;
+  }
+
+  saveRoute(): void {
+    const rider = this.riders.find(item => item.rider_id === Number(this.selectedRiderId));
+    if (!rider || !this.availableRiders.some(item => item.rider_id === rider.rider_id)) {
+      this.message = 'เลือกไรเดอร์ที่พร้อมรับงานก่อน';
+      return;
+    }
+    if (this.routeOrderIds.length === 0 || this.routeOrderIds.length > 3) {
+      this.message = 'เลือกออเดอร์ 1 ถึง 3 รายการก่อนบันทึกเส้นทาง';
+      return;
+    }
+
+    this.saving = true;
+    this.api.assignRiderOrders(rider.rider_id, this.routeOrderIds).pipe(finalize(() => {
+      this.saving = false;
+      this.changeDetector.markForCheck();
+    })).subscribe({
+      next: assignment => {
+        this.assignment = assignment;
+        this.message = `สร้างแผนส่งสำเร็จ: ${assignment.work_no}`;
         this.changeDetector.markForCheck();
       },
+      error: error => {
+        this.message = CustomerOrderService.errorMessage(error);
+        this.changeDetector.markForCheck();
+      }
+    });
+  }
+
+  openMap(): void {
+    if (!this.assignment) return;
+    this.router.navigate(['/rider-map'], {
+      queryParams: {
+        rider_id: this.assignment.rider_id,
+        work_no: this.assignment.work_no
+      }
     });
   }
 
-  private assignOrdersToRoutes(orders: CustomerOrder[], distances: number[][]): RiderRoute[] {
-    const routeCount = Math.min(
-      this.riderCount,
-      Math.max(1, Math.ceil(orders.length / this.maxOrdersPerRider)),
-    );
-    const routes: RiderRoute[] = Array.from({ length: this.riderCount }, (_, index) => ({
-      riderId: index + 1,
-      stops: [],
-      distanceKm: 0,
-      roadGeometry: [],
-    }));
-    if (orders.length === 0) return routes;
-
-    const medoids: number[] = [];
-    let firstMedoid = 0;
-    for (let orderIndex = 1; orderIndex < orders.length; orderIndex++) {
-      if (distances[0][orderIndex + 1] > distances[0][firstMedoid + 1]) {
-        firstMedoid = orderIndex;
-      }
-    }
-    medoids.push(firstMedoid);
-
-    while (medoids.length < routeCount) {
-      let nextMedoid = -1;
-      let greatestDistance = -1;
-      orders.forEach((_, orderIndex) => {
-        if (medoids.includes(orderIndex)) return;
-        const distanceToNearestMedoid = Math.min(
-          ...medoids.map(medoid => distances[orderIndex + 1][medoid + 1]),
-        );
-        if (distanceToNearestMedoid > greatestDistance) {
-          greatestDistance = distanceToNearestMedoid;
-          nextMedoid = orderIndex;
-        }
-      });
-      if (nextMedoid < 0) break;
-      medoids.push(nextMedoid);
-    }
-
-    let assignments = this.assignToMedoids(distances, medoids, orders.length);
-    for (let iteration = 0; iteration < 4; iteration++) {
-      const nextMedoids = medoids.map((_, routeIndex) => {
-        const members = assignments
-          .map((assignedRoute, orderIndex) => assignedRoute === routeIndex ? orderIndex : -1)
-          .filter(orderIndex => orderIndex >= 0);
-        return members.reduce((bestMedoid, candidate) => {
-          const candidateCost = members.reduce((sum, member) =>
-            sum + distances[candidate + 1][member + 1], 0);
-          const bestCost = members.reduce((sum, member) =>
-            sum + distances[bestMedoid + 1][member + 1], 0);
-          return candidateCost < bestCost ? candidate : bestMedoid;
-        }, members[0]);
-      });
-      if (nextMedoids.every((medoid, index) => medoid === medoids[index])) break;
-      medoids.splice(0, medoids.length, ...nextMedoids);
-      assignments = this.assignToMedoids(distances, medoids, orders.length);
-    }
-
-    assignments.forEach((routeIndex, orderIndex) => {
-      if (routeIndex >= 0 && routeIndex < routes.length) {
-        routes[routeIndex].stops.push(orders[orderIndex]);
-      }
-    });
-    routes.slice(0, routeCount).forEach(route => {
-      route.stops = this.orderStopsByRoadDistance(route.stops, orders, distances);
-    });
-    return routes;
+  clearRoute(): void {
+    this.routeOrderIds = [];
+    this.assignment = null;
+    this.message = '';
   }
 
-  private assignToMedoids(distances: number[][], medoids: number[], orderCount: number): number[] {
-    const assignments = Array<number>(orderCount).fill(-1);
-    const routeLoads = Array<number>(medoids.length).fill(0);
-    const pairs = medoids.flatMap((medoid, routeIndex) =>
-      Array.from({ length: orderCount }, (_, orderIndex) => ({
-        routeIndex,
-        orderIndex,
-        distance: distances[orderIndex + 1][medoid + 1],
-      }))
-    ).sort((left, right) =>
-      left.distance - right.distance ||
-      left.orderIndex - right.orderIndex ||
-      left.routeIndex - right.routeIndex
-    );
-
-    pairs.forEach(({ routeIndex, orderIndex }) => {
-      if (assignments[orderIndex] < 0 &&
-        routeLoads[routeIndex] < this.maxOrdersPerRider) {
-        assignments[orderIndex] = routeIndex;
-        routeLoads[routeIndex]++;
-      }
-    });
-    return assignments;
-  }
-
-  private orderStopsByRoadDistance(
-    stops: CustomerOrder[],
-    allOrders: CustomerOrder[],
-    distances: number[][],
-  ): CustomerOrder[] {
-    const remaining = stops.map(order => allOrders.indexOf(order));
-    const ordered: number[] = [];
-    let currentIndex = 0;
-    while (remaining.length) {
-      let nearestPosition = 0;
-      for (let position = 1; position < remaining.length; position++) {
-        if (distances[currentIndex][remaining[position] + 1] <
-          distances[currentIndex][remaining[nearestPosition] + 1]) {
-          nearestPosition = position;
-        }
-      }
-      currentIndex = remaining.splice(nearestPosition, 1)[0] + 1;
-      ordered.push(currentIndex - 1);
-    }
-
-    let improved = true;
-    while (improved && ordered.length > 2) {
-      improved = false;
-      const currentCost = this.routeDistance(ordered, distances);
-      for (let start = 0; start < ordered.length - 1 && !improved; start++) {
-        for (let end = start + 1; end < ordered.length; end++) {
-          const candidate = [
-            ...ordered.slice(0, start),
-            ...ordered.slice(start, end + 1).reverse(),
-            ...ordered.slice(end + 1),
-          ];
-          if (this.routeDistance(candidate, distances) < currentCost) {
-            ordered.splice(0, ordered.length, ...candidate);
-            improved = true;
-            break;
-          }
-        }
-      }
-    }
-    return ordered.map(orderIndex => allOrders[orderIndex]);
-  }
-
-  private routeDistance(orderIndexes: number[], distances: number[][]): number {
-    return orderIndexes.reduce((total, orderIndex, position) =>
-      total + distances[position === 0 ? 0 : orderIndexes[position - 1] + 1][orderIndex + 1], 0);
-  }
-
-  selectRoute(riderId: number): void {
-    this.routePlanning.selectRider(riderId);
-  }
-
-  formatDistance(distanceKm: number): string {
-    return `${distanceKm.toFixed(2)} กม.`;
-  }
-
-  colorFor(index: number): string {
-    return this.colors[index % this.colors.length];
-  }
-
-  private drawRoutes(): void {
-    const routeLayer = this.routeLayer;
-    if (!this.map || !routeLayer) return;
-    routeLayer.clearLayers();
-    if (!this.plan) return;
-
-    const originPoint: L.LatLngTuple = [this.plan.origin.latitude, this.plan.origin.longitude];
-    const allPoints: L.LatLngTuple[] = [originPoint];
-    L.marker(originPoint).bindPopup('จุดเริ่มต้น').addTo(routeLayer);
-
-    this.plan.routes.forEach((route, index) => {
-      const roadPoints: L.LatLngTuple[] = route.roadGeometry
-        .map(([longitude, latitude]) => [latitude, longitude]);
-      const stopPoints: L.LatLngTuple[] = route.stops.map(order =>
-        [Number(order.latitude), Number(order.longitude)]
-      );
-      allPoints.push(...roadPoints, ...stopPoints);
-      if (roadPoints.length > 0) {
-        L.polyline(roadPoints, { color: this.colorFor(index), weight: 4, opacity: 0.8 })
-          .addTo(routeLayer);
-      }
-      route.stops.forEach((order, stopIndex) => {
-        L.circleMarker(stopPoints[stopIndex], {
-          radius: 7,
-          color: this.colorFor(index),
-          fillColor: this.colorFor(index),
-          fillOpacity: 0.9,
-        }).bindPopup(`ไรเดอร์ ${route.riderId} · ออเดอร์ #${order.order_id}`)
-          .addTo(routeLayer);
-      });
-    });
-
-    if (allPoints.length > 1) {
-      this.map.fitBounds(L.latLngBounds(allPoints), { padding: [24, 24], maxZoom: 14 });
-    } else {
-      this.map.setView(originPoint, 13);
-    }
-  }
-
-  private validCoordinates(latitude: number, longitude: number): boolean {
-    return Number.isFinite(latitude) && Number.isFinite(longitude) &&
-      latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+  private distanceKm(
+    from: { latitude: number; longitude: number },
+    to: { latitude: number; longitude: number }
+  ): number {
+    const radians = (degrees: number) => degrees * Math.PI / 180;
+    const latitudeDelta = radians(to.latitude - from.latitude);
+    const longitudeDelta = radians(to.longitude - from.longitude);
+    const value = Math.sin(latitudeDelta / 2) ** 2
+      + Math.cos(radians(from.latitude))
+      * Math.cos(radians(to.latitude))
+      * Math.sin(longitudeDelta / 2) ** 2;
+    return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
   }
 }

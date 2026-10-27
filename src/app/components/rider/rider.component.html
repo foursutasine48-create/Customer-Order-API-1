@@ -1,0 +1,80 @@
+<main class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">RIDER MANAGEMENT</p>
+      <h1>จัดการไรเดอร์</h1>
+      <p class="subtitle">บันทึกข้อมูลกับ Backend และจัดงานส่งให้ไรเดอร์</p>
+    </div>
+    <div class="header-actions">
+      <a class="secondary link-button" routerLink="/route-planning">วางแผนเส้นทาง</a>
+      <a class="secondary link-button" routerLink="/rider-login">เข้าสู่หน้าไรเดอร์</a>
+    </div>
+  </header>
+
+  <section class="panel">
+    <h2>{{ editingId === null ? 'เพิ่มไรเดอร์' : 'แก้ไขข้อมูลไรเดอร์' }}</h2>
+    <form (ngSubmit)="saveRider()">
+      <div class="form-grid">
+        <label>ชื่อ-นามสกุล *
+          <input name="rider_name" [(ngModel)]="form.rider_name" required>
+        </label>
+        <label>เบอร์โทร *
+          <input name="phone" [(ngModel)]="form.phone" required>
+        </label>
+        <label>สถานะ
+          <select name="status" [(ngModel)]="form.status">
+            <option value="พร้อมรับงาน">พร้อมรับงาน</option>
+            <option value="ว่าง">ว่าง</option>
+            <option value="ไม่พร้อมรับงาน">ไม่พร้อมรับงาน</option>
+            <option value="กำลังส่ง">กำลังส่ง</option>
+          </select>
+        </label>
+      </div>
+      <div class="form-actions">
+        <button class="primary" type="submit" [disabled]="saving">
+          {{ saving ? 'กำลังบันทึก...' : (editingId === null ? 'เพิ่มไรเดอร์' : 'บันทึก') }}
+        </button>
+        <button class="secondary" type="button" (click)="cancelEdit()">ล้างฟอร์ม</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>รายชื่อไรเดอร์ ({{ riders.length }})</h2>
+    <p class="hint" *ngIf="loadingRiders">กำลังโหลดรายชื่อไรเดอร์...</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>รหัส</th><th>ชื่อ</th><th>เบอร์โทร</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let rider of riders">
+            <td>#{{ rider.rider_id }}</td>
+            <td>{{ rider.rider_name }}</td>
+            <td>{{ rider.phone }}</td>
+            <td>{{ rider.status }}</td>
+            <td class="actions">
+              <button class="small edit" type="button" (click)="editRider(rider)">แก้ไข</button>
+              <button class="small secondary" type="button" (click)="changeStatus(rider)"
+                [disabled]="rider.status === 'กำลังส่ง'">
+                {{ isAvailable(rider) ? 'พักงาน' : 'พร้อมรับงาน' }}
+              </button>
+              <button class="small delete" type="button" (click)="deleteRider(rider)"
+                [disabled]="deletingRiderId !== null">
+                {{ deletingRiderId === rider.rider_id ? 'กำลังลบ...' : 'ลบ' }}
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="!loadingRiders && riders.length === 0">
+            <td colspan="5" class="empty">ยังไม่มีข้อมูลไรเดอร์</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel route-links">
+    <h2>งานจัดส่ง</h2>
+    <p>วางแผนและคำนวณเส้นทางก่อนบันทึกใบงาน หรือเปิดแผนที่จากเลขใบงาน</p>
+    <a class="primary link-button" routerLink="/route-planning">ไปหน้าวางแผนเส้นทาง</a>
+    <a class="secondary link-button" routerLink="/rider-map">เปิดแผนที่ใบงาน</a>
+  </section>
+</main>

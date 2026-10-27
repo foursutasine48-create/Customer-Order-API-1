@@ -1,59 +1,60 @@
 <main class="page">
   <header class="page-header">
     <div>
-      <p class="eyebrow">RIDER ROUTE</p>
+      <p class="eyebrow">RIDER MAP</p>
       <h1>แผนที่เส้นทางไรเดอร์</h1>
-      <p class="subtitle">ดูจุดส่งตามลำดับและเปิดนำทางด้วย Google Maps</p>
+      <p class="subtitle">เปิดใบงานเพื่อดูจุดเริ่มต้นและลำดับจุดส่ง</p>
     </div>
-    <a routerLink="/route-planning" class="back-link">กลับไปวางแผนเส้นทาง</a>
+    <a routerLink="/route-planning">กลับหน้าวางแผนเส้นทาง</a>
   </header>
 
-  <section class="panel" *ngIf="routes.length; else noPlan">
-    <div class="toolbar">
-      <label>เลือกเส้นทางไรเดอร์
-        <select [(ngModel)]="selectedRiderId" name="rider" (ngModelChange)="selectRider()">
-          <option *ngFor="let route of routes" [ngValue]="route.riderId">
-            ไรเดอร์ {{ route.riderId }} · {{ route.stops.length }} จุดส่ง
+  <section class="panel">
+    <form class="lookup-form" (ngSubmit)="loadJob()">
+      <label>ไรเดอร์
+        <select name="riderId" [(ngModel)]="selectedRiderId">
+          <option [ngValue]="0">-- เลือกไรเดอร์ --</option>
+          <option *ngFor="let rider of riders" [ngValue]="rider.rider_id">
+            #{{ rider.rider_id }} — {{ rider.rider_name }}
           </option>
         </select>
       </label>
-      <a *ngIf="googleMapsUrl() as mapsUrl" [href]="mapsUrl" target="_blank"
-        rel="noopener noreferrer" class="maps-button">
-        เปิด Google Maps / แผนที่นำทาง
-      </a>
-    </div>
-    <p class="hint" *ngIf="hasMoreGoogleMapsStops">
-      Google Maps รองรับจุดแวะได้จำกัด จึงเปิดได้สูงสุด 9 จุดแวะก่อนจุดหมายสุดท้าย
-    </p>
-    <div class="map-layout" *ngIf="selectedRoute as route">
-      <div id="riderRouteMap" class="rider-map" aria-label="แผนที่เส้นทางไรเดอร์"></div>
-      <aside class="stop-list">
-        <h2>ลำดับการจัดส่ง</h2>
-        <p class="route-info">
-          ไรเดอร์ {{ route.riderId }} · {{ route.stops.length }} จุด ·
-          {{ route.distanceKm.toFixed(2) }} กม. ตามถนน
-        </p>
-        <ol>
-          <li *ngFor="let order of route.stops; let i = index">
-            <span class="stop-number" [style.backgroundColor]="colorFor(route.riderId)">{{ i + 1 }}</span>
-            <div>
-              <strong>ออเดอร์ #{{ order.order_id }}</strong>
-              <span>{{ order.first_name }} {{ order.last_name }}</span>
-              <small>{{ order.address || 'ไม่มีข้อมูลที่อยู่' }}</small>
-              <small>{{ order.latitude }}, {{ order.longitude }}</small>
-            </div>
-          </li>
-          <li *ngIf="route.stops.length === 0" class="empty">ไรเดอร์คนนี้ยังไม่มีจุดส่ง</li>
-        </ol>
-      </aside>
-    </div>
+      <label>เลขใบงาน
+        <input name="workNo" [(ngModel)]="workNo" placeholder="เช่น JOB-20261027-A1B2C3" required>
+      </label>
+      <button class="primary" type="submit" [disabled]="loading">
+        {{ loading ? 'กำลังโหลด...' : 'เปิดเส้นทาง' }}
+      </button>
+    </form>
+    <p class="message" *ngIf="message" role="status">{{ message }}</p>
   </section>
 
-  <ng-template #noPlan>
-    <section class="panel empty-state">
-      <h2>ยังไม่มีเส้นทางที่คำนวณไว้</h2>
-      <p>เริ่มวางแผนเส้นทางก่อน แล้วกลับมาดูแผนที่ของไรเดอร์ได้ที่นี่</p>
-      <a routerLink="/route-planning" class="maps-button">ไปวางแผนเส้นทาง</a>
-    </section>
-  </ng-template>
+  <section class="panel" *ngIf="job as currentJob">
+    <div class="route-heading">
+      <div>
+        <p class="eyebrow">WORK {{ currentJob.work_no }}</p>
+        <h2>{{ currentJob.rider_name }}</h2>
+        <p>{{ currentJob.orders.length }} จุดส่ง · {{ currentJob.total_boxes }} กล่อง ·
+          {{ currentJob.total_distance_km }} กม. โดยประมาณ</p>
+      </div>
+      <span class="route-color" [style.backgroundColor]="currentJob.route_color"></span>
+      <a *ngIf="googleMapsUrl" class="primary link-button"
+        [href]="googleMapsUrl" target="_blank" rel="noopener noreferrer">
+        นำทางด้วย Google Maps
+      </a>
+    </div>
+
+    <div #mapContainer class="map" aria-label="แผนที่เส้นทางจัดส่ง"></div>
+    <p class="map-note">เส้นบนแผนที่เป็นเส้นเชื่อมจุดส่งแบบตรงเพื่อแสดงลำดับ Google Maps จะคำนวณเส้นทางถนนสำหรับนำทาง</p>
+
+    <ol class="stop-list">
+      <li *ngFor="let stop of currentJob.orders">
+        <span class="stop-number">{{ stop.stop_sequence }}</span>
+        <div>
+          <strong>#{{ stop.order_id }} — {{ stop.first_name }} {{ stop.last_name }}</strong>
+          <p>{{ stop.address || 'ไม่มีที่อยู่' }}</p>
+          <p>{{ stop.phone || 'ไม่มีเบอร์โทร' }} · {{ stop.box_quantity }} กล่อง</p>
+        </div>
+      </li>
+    </ol>
+  </section>
 </main>

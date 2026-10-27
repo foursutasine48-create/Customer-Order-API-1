@@ -1,10 +1,14 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import {
+  Rider,
+  RiderAssignment,
+  RiderInput,
+  RiderJob,
+} from '../models/rider.model';
 
 // ---------- URL ของ API ----------
-// รันในเครื่อง:  'http://localhost:3000'
-// ใช้งานจริง:     'https://customer-order-api-1-1pkk.onrender.com'
 const API_URL = 'https://customer-order-api-1-1pkk.onrender.com';
 
 // ---------- ชนิดข้อมูล ----------
@@ -103,5 +107,43 @@ export class ApiService {
 
   nearbyOrders(lat: number, lng: number, radius = 2): Observable<Order[]> {
     return this.http.get<Order[]>(`${API_URL}/order/nearby`, { params: { lat, lng, radius } });
+  }
+
+  // ================= ไรเดอร์ =================
+  getRiders(): Observable<Rider[]> {
+    return this.http.get<Rider[]>(`${API_URL}/rider`);
+  }
+
+  addRider(data: RiderInput): Observable<Rider> {
+    return this.http.post<Rider>(`${API_URL}/rider`, data);
+  }
+
+  updateRider(id: number, data: RiderInput): Observable<Rider> {
+    return this.http.put<Rider>(`${API_URL}/rider/${id}`, data);
+  }
+
+  updateRiderStatus(id: number, status: string): Observable<Pick<Rider, 'rider_id' | 'status'>> {
+    return this.http.patch<Pick<Rider, 'rider_id' | 'status'>>(
+      `${API_URL}/rider/${id}/status`,
+      { status }
+    );
+  }
+
+  deleteRider(id: number): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${API_URL}/rider/${id}`);
+  }
+
+  assignRiderOrders(riderId: number, orderIds: number[]): Observable<RiderAssignment> {
+    return this.http.post<RiderAssignment>(
+      `${API_URL}/rider/${riderId}/assignments`,
+      { order_ids: orderIds }
+    );
+  }
+
+  lookupRiderJob(riderId: number, workNo: string): Observable<RiderJob> {
+    return this.http.post<RiderJob>(`${API_URL}/rider/job-lookup`, {
+      rider_id: riderId,
+      work_no: workNo,
+    });
   }
 }
