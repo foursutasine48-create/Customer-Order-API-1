@@ -1,0 +1,59 @@
+<main class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">RIDER ROUTE</p>
+      <h1>แผนที่เส้นทางไรเดอร์</h1>
+      <p class="subtitle">ดูจุดส่งตามลำดับและเปิดนำทางด้วย Google Maps</p>
+    </div>
+    <a routerLink="/route-planning" class="back-link">กลับไปวางแผนเส้นทาง</a>
+  </header>
+
+  <section class="panel" *ngIf="routes.length; else noPlan">
+    <div class="toolbar">
+      <label>เลือกเส้นทางไรเดอร์
+        <select [(ngModel)]="selectedRiderId" name="rider" (ngModelChange)="selectRider()">
+          <option *ngFor="let route of routes" [ngValue]="route.riderId">
+            ไรเดอร์ {{ route.riderId }} · {{ route.stops.length }} จุดส่ง
+          </option>
+        </select>
+      </label>
+      <a *ngIf="googleMapsUrl() as mapsUrl" [href]="mapsUrl" target="_blank"
+        rel="noopener noreferrer" class="maps-button">
+        เปิด Google Maps / แผนที่นำทาง
+      </a>
+    </div>
+    <p class="hint" *ngIf="hasMoreGoogleMapsStops">
+      Google Maps รองรับจุดแวะได้จำกัด จึงเปิดได้สูงสุด 9 จุดแวะก่อนจุดหมายสุดท้าย
+    </p>
+    <div class="map-layout" *ngIf="selectedRoute as route">
+      <div id="riderRouteMap" class="rider-map" aria-label="แผนที่เส้นทางไรเดอร์"></div>
+      <aside class="stop-list">
+        <h2>ลำดับการจัดส่ง</h2>
+        <p class="route-info">
+          ไรเดอร์ {{ route.riderId }} · {{ route.stops.length }} จุด ·
+          {{ route.distanceKm.toFixed(2) }} กม. ตามถนน
+        </p>
+        <ol>
+          <li *ngFor="let order of route.stops; let i = index">
+            <span class="stop-number" [style.backgroundColor]="colorFor(route.riderId)">{{ i + 1 }}</span>
+            <div>
+              <strong>ออเดอร์ #{{ order.order_id }}</strong>
+              <span>{{ order.first_name }} {{ order.last_name }}</span>
+              <small>{{ order.address || 'ไม่มีข้อมูลที่อยู่' }}</small>
+              <small>{{ order.latitude }}, {{ order.longitude }}</small>
+            </div>
+          </li>
+          <li *ngIf="route.stops.length === 0" class="empty">ไรเดอร์คนนี้ยังไม่มีจุดส่ง</li>
+        </ol>
+      </aside>
+    </div>
+  </section>
+
+  <ng-template #noPlan>
+    <section class="panel empty-state">
+      <h2>ยังไม่มีเส้นทางที่คำนวณไว้</h2>
+      <p>เริ่มวางแผนเส้นทางก่อน แล้วกลับมาดูแผนที่ของไรเดอร์ได้ที่นี่</p>
+      <a routerLink="/route-planning" class="maps-button">ไปวางแผนเส้นทาง</a>
+    </section>
+  </ng-template>
+</main>

@@ -1,0 +1,203 @@
+:host {
+  display: block;
+  color: #29243a;
+  font-family: Arial, "Noto Sans Thai", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 8px;
+}
+
+.page-header,
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page-header {
+  margin-bottom: 22px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: #8760bd;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.subtitle,
+.hint,
+.route-info {
+  color: #777184;
+  font-size: 13px;
+}
+
+.subtitle {
+  margin: 7px 0 0;
+}
+
+.panel {
+  padding: 22px;
+  border: 1px solid #eee8f5;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 4px 16px #2b164908;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #554d65;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+select {
+  min-width: 230px;
+  padding: 10px 12px;
+  border: 1px solid #ddd6e8;
+  border-radius: 9px;
+  background: white;
+  font: inherit;
+}
+
+.back-link,
+.maps-button {
+  display: inline-block;
+  padding: 10px 15px;
+  border-radius: 9px;
+  background: #8153b5;
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.back-link {
+  background: #f0edf4;
+  color: #554d65;
+}
+
+.hint {
+  margin: 12px 0 0;
+}
+
+.map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 0.8fr);
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.rider-map {
+  z-index: 0;
+  width: 100%;
+  min-height: 500px;
+  border: 1px solid #e5deee;
+  border-radius: 12px;
+}
+
+.stop-list {
+  max-height: 500px;
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid #eeeaf3;
+  border-radius: 12px;
+}
+
+.route-info {
+  margin: 0 0 8px;
+}
+
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+ol li {
+  display: flex;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid #eeeaf3;
+  font-size: 13px;
+}
+
+ol li > div {
+  display: grid;
+  gap: 4px;
+}
+
+ol li strong {
+  color: #30283e;
+}
+
+ol li span,
+ol li small {
+  color: #777184;
+}
+
+.stop-number {
+  flex: 0 0 25px;
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  font-weight: 700;
+}
+
+.empty-state {
+  text-align: center;
+}
+
+.empty-state p,
+.empty {
+  color: #777184;
+}
+
+@media (max-width: 800px) {
+  .page {
+    padding: 0;
+  }
+
+  .page-header,
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .map-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .rider-map {
+    min-height: 360px;
+  }
+
+  .stop-list {
+    max-height: none;
+  }
+}

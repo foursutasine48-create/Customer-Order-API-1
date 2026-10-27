@@ -1,0 +1,79 @@
+<main class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">DELIVERY ROUTE PLANNING</p>
+      <h1>วางแผนเส้นทางจัดส่ง</h1>
+      <p class="subtitle">จัดกลุ่มออเดอร์ใกล้กันตามระยะทางถนน แล้วแบ่งให้ไรเดอร์แต่ละคน</p>
+    </div>
+    <div class="count">
+      <strong>{{ pendingOrders.length }}</strong>
+      <span>ออเดอร์รอจัดส่ง</span>
+    </div>
+  </header>
+
+  <section class="panel">
+    <h2>ตั้งค่าการวางแผน</h2>
+    <div class="settings-grid">
+      <label>Latitude จุดเริ่มต้น
+        <input type="number" step="any" [(ngModel)]="originLatitude" name="originLatitude">
+      </label>
+      <label>Longitude จุดเริ่มต้น
+        <input type="number" step="any" [(ngModel)]="originLongitude" name="originLongitude">
+      </label>
+      <label>จำนวนไรเดอร์
+        <input type="number" min="1" max="6" step="1" [(ngModel)]="riderCount" name="riderCount">
+      </label>
+    </div>
+    <div class="actions">
+      <button class="primary" type="button" (click)="calculateRoutes()" [disabled]="loading || routing">
+        {{ loading ? 'กำลังโหลดออเดอร์...' : (routing ? 'กำลังหาเส้นทางตามถนน...' : 'คำนวณเส้นทางใหม่') }}
+      </button>
+      <button class="secondary" type="button" (click)="loadOrders()" [disabled]="loading || routing">
+        โหลดออเดอร์ล่าสุด
+      </button>
+    </div>
+    <p class="message" *ngIf="message" role="status">{{ message }}</p>
+    <p class="hint">จัดกลุ่มและเรียงจุดส่งด้วยระยะทางถนนจาก OSRM / OpenStreetMap ไม่มีข้อมูลจราจรเรียลไทม์</p>
+  </section>
+
+  <section class="panel map-panel">
+    <div class="section-heading">
+      <div>
+        <h2>เส้นทางของไรเดอร์</h2>
+        <p class="subtitle">แต่ละสีแทนเส้นทางของไรเดอร์หนึ่งคน</p>
+      </div>
+      <a routerLink="/rider-map" class="map-link" *ngIf="routes.length">เปิดหน้าแผนที่ไรเดอร์</a>
+    </div>
+    <div id="routePlanningMap" class="route-map" aria-label="แผนที่เส้นทางจัดส่ง"></div>
+  </section>
+
+  <section class="panel">
+    <h2>รายการเส้นทาง</h2>
+    <div class="route-grid" *ngIf="routes.length; else noRoutes">
+      <article class="route-card" *ngFor="let route of routes; let i = index">
+        <div class="route-heading">
+          <span class="route-dot" [style.backgroundColor]="colorFor(i)"></span>
+          <h3>ไรเดอร์ {{ route.riderId }}</h3>
+          <strong>{{ formatDistance(route.distanceKm) }}</strong>
+        </div>
+        <p class="route-summary">{{ route.stops.length }} / {{ maxOrdersPerRider }} ออเดอร์</p>
+        <ol>
+          <li *ngFor="let order of route.stops">
+            <strong>ออเดอร์ #{{ order.order_id }}</strong>
+            <span>{{ order.first_name }} {{ order.last_name }}</span>
+          </li>
+          <li *ngIf="route.stops.length === 0" class="empty-stop">ยังไม่มีจุดส่ง</li>
+        </ol>
+        <a routerLink="/rider-map" class="route-action" (click)="selectRoute(route.riderId)">
+          เปิดเส้นทางนี้
+        </a>
+      </article>
+    </div>
+    <ng-template #noRoutes>
+      <p class="empty">กด “คำนวณเส้นทางใหม่” เพื่อจัดออเดอร์ให้ไรเดอร์</p>
+    </ng-template>
+    <p class="hint" *ngIf="plan?.unassignedOrders">
+      มี {{ plan?.unassignedOrders }} ออเดอร์ที่ยังไม่ได้จัดสรร เนื่องจากไม่มีพิกัดหรือไรเดอร์เต็มความจุ
+    </p>
+  </section>
+</main>
