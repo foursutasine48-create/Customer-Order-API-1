@@ -128,6 +128,81 @@ function handleError(res: express.Response, error: unknown, operation: string): 
   res.status(500).json({ code: "DELIVERY_PLAN_FAILED", message: "ไม่สามารถประมวลผลแผนจัดส่งได้" });
 }
 
+// GET /delivery-plan/summary
+router.get("/summary", async (_req, res) => {
+  try {
+    const [rows]: any = await conn.query(
+      `SELECT COUNT(*) AS plan_count,
+              COALESCE(SUM(total_cost), 0) AS total_cost,
+              COALESCE(SUM(total_profit), 0) AS total_profit,
+              COALESCE(SUM(total_time), 0) AS delivery_time_minutes,
+              COALESCE(SUM(total_distance), 0) AS total_distance_km,
+              (SELECT COUNT(DISTINCT rs.order_id)
+                 FROM Route_Stop rs
+                 JOIN Rider_Route rr ON rr.route_id = rs.route_id
+                 JOIN Delivery_Plan dp2 ON dp2.plan_id = rr.plan_id) AS planned_order_count,
+              (SELECT COALESCE(SUM(o.box_quantity), 0)
+                 FROM Route_Stop rs
+                 JOIN Rider_Route rr ON rr.route_id = rs.route_id
+                 JOIN Delivery_Plan dp2 ON dp2.plan_id = rr.plan_id
+                 JOIN \`Order\` o ON o.order_id = rs.order_id) AS planned_box_count
+         FROM Delivery_Plan`
+    );
+    const summary = rows[0];
+    res.json({
+      plan_count: Number(summary.plan_count),
+      total_cost: Number(summary.total_cost),
+      total_profit: Number(summary.total_profit),
+      delivery_time_minutes: Number(summary.delivery_time_minutes),
+      total_distance_km: Number(Number(summary.total_distance_km).toFixed(2)),
+      planned_order_count: Number(summary.planned_order_count),
+      planned_box_count: Number(summary.planned_box_count),
+    });
+  } catch (error) {
+    handleError(res, error, "Failed to fetch delivery plan summary");
+  }
+});
+
+// GET /delivery-plan
+router.get("/", async (_req, res) => {
+  try {
+    const [rows]: any = await conn.query(
+      `SELECT dp.plan_id, DATE_FORMAT(dp.delivery_date, '%Y-%m-%d') AS delivery_date,
+              dp.start_time, dp.end_time,
+              dp.total_distance, dp.total_time, dp.total_cost,
+              dp.total_profit, dp.status,
+              COUNT(DISTINCT rr.route_id) AS route_count,
+              COUNT(DISTINCT rs.order_id) AS order_count,
+              COALESCE(SUM(o.box_quantity), 0) AS total_boxes
+         FROM Delivery_Plan dp
+         LEFT JOIN Rider_Route rr ON rr.plan_id = dp.plan_id
+         LEFT JOIN Route_Stop rs ON rs.route_id = rr.route_id
+         LEFT JOIN \`Order\` o ON o.order_id = rs.order_id
+        GROUP BY dp.plan_id, dp.delivery_date, dp.start_time, dp.end_time,
+                 dp.total_distance, dp.total_time, dp.total_cost,
+                 dp.total_profit, dp.status
+        ORDER BY dp.delivery_date DESC, dp.plan_id DESC
+        LIMIT 100`
+    );
+    res.json(rows.map((row: any) => ({
+      plan_id: Number(row.plan_id),
+      delivery_date: row.delivery_date,
+      start_time: row.start_time,
+      end_time: row.end_time,
+      total_distance_km: Number(row.total_distance),
+      total_time_minutes: Number(row.total_time),
+      total_cost: Number(row.total_cost),
+      total_profit: Number(row.total_profit),
+      status: row.status,
+      route_count: Number(row.route_count),
+      order_count: Number(row.order_count),
+      total_boxes: Number(row.total_boxes),
+    })));
+  } catch (error) {
+    handleError(res, error, "Failed to list delivery plans");
+  }
+});
+
 // POST /delivery-plan/preview
 router.post("/preview", async (req, res) => {
   let connection: Awaited<ReturnType<typeof conn.getConnection>> | undefined;
@@ -351,8 +426,21 @@ router.get("/:planId", async (req, res) => {
     res.json({
       ...plans[0],
       plan_id: Number(plans[0].plan_id),
+      total_distance: Number(plans[0].total_distance),
+      total_time: Number(plans[0].total_time),
+      total_cost: Number(plans[0].total_cost),
+      total_profit: Number(plans[0].total_profit),
       total_distance_km: Number(plans[0].total_distance),
       total_time_minutes: Number(plans[0].total_time),
+      route_count: routesById.size,
+      order_count: [...routesById.values()].reduce(
+        (sum, route) => sum + route.orders.length,
+        0
+      ),
+      total_boxes: [...routesById.values()].reduce(
+        (sum, route) => sum + route.total_boxes,
+        0
+      ),
       distance_method: DISTANCE_METHOD,
       start_point: SHOP_CENTER,
       routes: [...routesById.values()],
