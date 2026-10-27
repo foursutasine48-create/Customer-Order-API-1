@@ -1,0 +1,27 @@
+info:
+  name: preview
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3000/delivery-plan/preview
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "routes": [
+          { "rider_id": 1, "order_ids": [14, 12] },
+          { "rider_id": 2, "order_ids": [18] }
+        ]
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
