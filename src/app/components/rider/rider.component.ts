@@ -54,7 +54,7 @@ export class RiderComponent implements OnInit {
   }
 
   isAvailable(rider: Rider): boolean {
-    return rider.status === 'ว่าง' || rider.status === 'พร้อมรับงาน';
+    return rider.status === 'พร้อมรับงาน';
   }
 
   saveRider(): void {

@@ -23,13 +23,21 @@ Open `http://localhost:4200/`. The server uses port `4200` locally or the `PORT`
 - Create and manage orders, including updating box quantities and deleting individual orders.
 - Generate 20–30 sample orders through the backend or clear all orders.
 - Manage riders, assign up to three orders per route, and look up a delivery job by rider ID and work number.
+- Mark an individual stop as delivered from the rider job page; the order and route stop are updated, and the rider becomes available after all stops on that route are delivered.
 - Plan a delivery route by nearest stop, adjust the stop order, and view the saved route on a Leaflet map or in Google Maps.
+- View dashboard totals and delivery-plan summaries with per-rider order details.
 
-`ApiService` always uses the configured Render API URL, including when the frontend runs locally. The backend must provide the endpoints used by `ApiService`, including `/customer`, `/customer/search`, `/customer/nearby`, `/order`, `/order/simulate`, `/order/clear`, `/order/nearby`, `/rider`, `/rider/:id/status`, `/rider/:id/assignments`, and `/rider/job-lookup`.
+`ApiService` always uses the configured Render API URL, including when the frontend runs locally. The backend must provide the endpoints used by `ApiService`, including `/customer`, `/customer/search`, `/customer/nearby`, `/order`, `/order/simulate`, `/order/clear`, `/order/nearby`, `/rider`, `/rider/:id/status`, `/rider/:id/assignments`, `/rider/job-lookup`, `/rider/job-delivered`, `/delivery-plan`, `/delivery-plan/summary`, and `/delivery-plan/:planId`.
 
-The frontend always uses the configured Render API URL, including when opened locally, so the local backend does not need to be running. The Rider screens use the API implemented in the backend project's `controller/rider.ts`. Rider job lookup currently uses rider ID and work number; the backend does not provide authentication.
+The frontend always uses the configured Render API URL, including when opened locally, so the local backend does not need to be running. The Rider screens use the API implemented in the backend project's `controller/rider.ts`. Rider job lookup currently uses rider ID and work number; the backend does not provide authentication. Marking a stop as delivered sets that order and stop to `จัดส่งแล้ว`; the rider remains `กำลังส่ง` until all stops on the same route have been delivered, then becomes `พร้อมรับงาน`.
 
-The route planner can save one route for one rider at a time, with up to three orders, using the existing rider assignment API. Route ordering is estimated by straight-line distance from the shop and can be adjusted before saving. The backend currently has no API to list, edit, or recalculate saved routes; saved plans update order and rider statuses immediately. The map draws straight lines between stops; Google Maps provides road navigation.
+Rider statuses are `พร้อมรับงาน`, `ไม่พร้อมรับงาน`, and `กำลังส่ง`; new riders default to `พร้อมรับงาน`. After deploying the backend change, update any existing database rows with the retired `ว่าง` status once:
+
+```sql
+UPDATE Rider SET status = 'พร้อมรับงาน' WHERE status = 'ว่าง';
+```
+
+The current route planner saves one route for one rider at a time, with up to three orders, using the rider assignment API. Pressing calculate uses road distances and route geometry from the public OpenStreetMap OSRM service to order stops and draw the route. Google Maps opens driving directions for those stops, but may choose different roads. The candidate-order distance hint is still a straight-line estimate. Backend plan cost, time, and distance totals are also still calculated from straight-line distances, so they may differ from the displayed OSRM road distance.
 
 ## Code scaffolding
 

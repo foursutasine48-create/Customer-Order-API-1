@@ -2,6 +2,11 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  DeliveryPlanDetail,
+  DeliveryPlanListItem,
+  DeliveryPlanSummary
+} from '../models/delivery-plan.model';
+import {
   Rider,
   RiderAssignment,
   RiderInput,
@@ -145,5 +150,42 @@ export class ApiService {
       rider_id: riderId,
       work_no: workNo,
     });
+  }
+
+  markRiderOrderDelivered(
+    riderId: number,
+    workNo: string,
+    orderId: number
+  ): Observable<{
+    rider_id: number;
+    order_id: number;
+    delivery_status: string;
+    order_status: string;
+    rider_status: string;
+  }> {
+    return this.http.patch<{
+      rider_id: number;
+      order_id: number;
+      delivery_status: string;
+      order_status: string;
+      rider_status: string;
+    }>(`${API_URL}/rider/job-delivered`, {
+      rider_id: riderId,
+      work_no: workNo,
+      order_id: orderId,
+    });
+  }
+
+  // ================= แผนจัดส่ง =================
+  getDeliveryPlanSummary(): Observable<DeliveryPlanSummary> {
+    return this.http.get<DeliveryPlanSummary>(`${API_URL}/delivery-plan/summary`);
+  }
+
+  getDeliveryPlans(): Observable<DeliveryPlanListItem[]> {
+    return this.http.get<DeliveryPlanListItem[]>(`${API_URL}/delivery-plan`);
+  }
+
+  getDeliveryPlan(planId: number): Observable<DeliveryPlanDetail> {
+    return this.http.get<DeliveryPlanDetail>(`${API_URL}/delivery-plan/${planId}`);
   }
 }

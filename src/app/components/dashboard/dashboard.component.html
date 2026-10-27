@@ -1,0 +1,85 @@
+<main class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">OVERVIEW</p>
+      <h1>Dashboard</h1>
+      <p class="subtitle">ภาพรวมออเดอร์ ไรเดอร์ และแผนจัดส่งที่บันทึกแล้ว</p>
+    </div>
+    <button class="secondary" type="button" (click)="refresh()" [disabled]="loading">
+      {{ loading ? 'กำลังโหลด...' : 'รีเฟรชข้อมูล' }}
+    </button>
+  </header>
+
+  <p class="message" *ngIf="loading">กำลังโหลดข้อมูลจาก Backend...</p>
+  <p class="error" *ngIf="message" role="alert">{{ message }}</p>
+
+  <section class="cards" *ngIf="planSummary as summary">
+    <article class="card blue">
+      <span>ออเดอร์ทั้งหมด</span>
+      <strong>{{ orderCount }}</strong>
+      <small>ออเดอร์ในระบบ</small>
+    </article>
+    <article class="card purple">
+      <span>ไรเดอร์ทั้งหมด</span>
+      <strong>{{ riderCount }}</strong>
+      <small>ไรเดอร์ในระบบ</small>
+    </article>
+    <article class="card orange">
+      <span>ค่าใช้จ่าย</span>
+      <strong>{{ summary.total_cost | number:'1.2-2' }}</strong>
+      <small>บาท · {{ summary.plan_count }} แผนที่บันทึก</small>
+    </article>
+    <article class="card" [class.green]="summary.total_profit >= 0" [class.red]="summary.total_profit < 0">
+      <span>{{ summary.total_profit >= 0 ? 'กำไร' : 'ขาดทุน' }}</span>
+      <strong>{{ summary.total_profit | number:'1.2-2' }}</strong>
+      <small>บาท · รวมจากแผนที่บันทึก</small>
+    </article>
+    <article class="card teal">
+      <span>เวลาในการจัดส่ง</span>
+      <strong>{{ summary.delivery_time_minutes | number }}</strong>
+      <small>นาทีรวมตามข้อมูลแผน</small>
+    </article>
+    <article class="card gray">
+      <span>ออเดอร์ในแผนส่ง</span>
+      <strong>{{ summary.planned_order_count }}</strong>
+      <small>{{ summary.planned_box_count }} กล่อง · {{ summary.total_distance_km | number:'1.2-2' }} กม.</small>
+    </article>
+  </section>
+
+  <section class="panel">
+    <div class="section-heading">
+      <div>
+        <h2>แผนจัดส่งล่าสุด</h2>
+        <p>แสดง 5 แผนล่าสุดจากทั้งหมดไม่เกิน 100 แผนที่ Backend ส่งมา</p>
+      </div>
+      <a routerLink="/delivery-summary">ดูสรุปการจัดส่ง</a>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>แผน</th><th>วันที่</th><th>ไรเดอร์</th><th>ออเดอร์</th><th>ค่าใช้จ่าย</th><th>กำไร/ขาดทุน</th><th></th></tr></thead>
+        <tbody>
+          <tr *ngFor="let plan of recentPlans">
+            <td>#{{ plan.plan_id }}</td>
+            <td>{{ plan.delivery_date | date:'dd/MM/yyyy' }}</td>
+            <td>{{ plan.route_count }}</td>
+            <td>{{ plan.order_count }} ({{ plan.total_boxes }} กล่อง)</td>
+            <td>{{ plan.total_cost | number:'1.2-2' }} บาท</td>
+            <td [class.negative]="plan.total_profit < 0">{{ plan.total_profit | number:'1.2-2' }} บาท</td>
+            <td><a [routerLink]="['/delivery-summary']" [queryParams]="{ plan_id: plan.plan_id }">รายละเอียด</a></td>
+          </tr>
+          <tr *ngIf="!loading && recentPlans.length === 0">
+            <td colspan="7" class="empty">ยังไม่มีแผนจัดส่งที่บันทึก</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">ค่าใช้จ่าย กำไร เวลา และระยะทางเป็นผลรวมของแผนที่บันทึกทั้งหมด ส่วนจำนวนออเดอร์และไรเดอร์เป็นจำนวนข้อมูลปัจจุบันในระบบ</p>
+  </section>
+
+  <nav class="quick-links">
+    <a routerLink="/customers">จัดการลูกค้า</a>
+    <a routerLink="/orders">จัดการออเดอร์</a>
+    <a routerLink="/riders">จัดการไรเดอร์</a>
+    <a routerLink="/route-planning">วางแผนเส้นทาง</a>
+  </nav>
+</main>

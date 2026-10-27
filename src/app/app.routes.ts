@@ -6,8 +6,18 @@ import { RiderJobComponent } from './components/rider-job/rider-job.component';
 import { RiderLoginComponent } from './components/rider-login/rider-login.component';
 import { RoutePlanningComponent } from './components/route-planning/route-planning.component';
 import { RiderMapComponent } from './components/rider-map/rider-map.component';
+import { DashboardComponent } from './components/dashboard/dashboard.component';
+import { DeliverySummaryComponent } from './components/delivery-summary/delivery-summary.component';
 
 export const routes: Routes = [
+  {
+    path: 'dashboard',
+    component: DashboardComponent,
+  },
+  {
+    path: 'delivery-summary',
+    component: DeliverySummaryComponent,
+  },
   {
     path: 'customers',
     component: CustomerComponent,
@@ -38,7 +48,7 @@ export const routes: Routes = [
   },
   {
     path: '',
-    redirectTo: 'customers',
+    redirectTo: 'dashboard',
     pathMatch: 'full',
   },
   {

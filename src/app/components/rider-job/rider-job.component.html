@@ -31,6 +31,12 @@
           <p>เวลาถึงโดยประมาณ {{ stop.estimated_time | date:'HH:mm' }}
             · สถานะ {{ stop.delivery_status || 'รอส่ง' }}</p>
         </div>
+        <button type="button" class="delivered-button"
+          (click)="markDelivered(stop.order_id)"
+          [disabled]="stop.delivery_status === 'จัดส่งแล้ว' || updatingOrderIds.has(stop.order_id)">
+          {{ updatingOrderIds.has(stop.order_id) ? 'กำลังบันทึก...' :
+             stop.delivery_status === 'จัดส่งแล้ว' ? 'ส่งแล้ว ✓' : 'จัดส่งแล้ว' }}
+        </button>
       </article>
       <p class="empty" *ngIf="currentJob.orders.length === 0">ใบงานนี้ไม่มีจุดส่ง</p>
     </section>

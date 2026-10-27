@@ -18,6 +18,8 @@ a { color: #315d8b; }
 .details { flex: 1; }
 h3 { margin: 3px 0 8px; font-size: 16px; }
 .details p { margin: 4px 0; color: #625d70; }
+.delivered-button { padding: 10px 14px; border: 0; border-radius: 8px; color: white; background: #16834a; font-weight: 700; cursor: pointer; }
+.delivered-button:disabled { background: #9aa8a0; cursor: not-allowed; }
 .tag { color: #315d8b; font-size: 12px; font-weight: 700; }
 .message, .empty { color: #a94242; }
-@media (max-width: 640px) { .page { padding: 16px; } .page-header { align-items: flex-start; flex-direction: column; } .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .page { padding: 16px; } .page-header { align-items: flex-start; flex-direction: column; } .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stop { flex-wrap: wrap; } .delivered-button { margin-left: 44px; } }

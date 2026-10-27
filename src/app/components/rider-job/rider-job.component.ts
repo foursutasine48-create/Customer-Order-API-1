@@ -17,6 +17,7 @@ export class RiderJobComponent implements OnInit {
   job: RiderJob | null = null;
   message = '';
   loading = false;
+  updatingOrderIds = new Set<number>();
 
   constructor(
     private api: ApiService,
@@ -40,6 +41,32 @@ export class RiderJobComponent implements OnInit {
     })).subscribe({
       next: job => {
         this.job = job;
+        this.changeDetector.markForCheck();
+      },
+      error: error => {
+        this.message = CustomerOrderService.errorMessage(error);
+        this.changeDetector.markForCheck();
+      }
+    });
+  }
+
+  markDelivered(orderId: number): void {
+    if (!this.job || this.updatingOrderIds.has(orderId)) return;
+
+    this.message = '';
+    this.updatingOrderIds.add(orderId);
+    this.api.markRiderOrderDelivered(
+      this.job.rider_id,
+      this.job.work_no,
+      orderId
+    ).pipe(finalize(() => {
+      this.updatingOrderIds.delete(orderId);
+      this.changeDetector.markForCheck();
+    })).subscribe({
+      next: result => {
+        const stop = this.job?.orders.find(order => order.order_id === orderId);
+        if (stop) stop.delivery_status = result.delivery_status;
+        this.message = `ออเดอร์ #${orderId} จัดส่งแล้ว และไรเดอร์พร้อมรับงาน`;
         this.changeDetector.markForCheck();
       },
       error: error => {

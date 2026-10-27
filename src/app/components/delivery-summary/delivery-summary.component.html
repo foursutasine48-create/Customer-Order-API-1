@@ -1,0 +1,83 @@
+<main class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">DELIVERY SUMMARY</p>
+      <h1>สรุปผลการจัดส่ง</h1>
+      <p class="subtitle">ตรวจค่าใช้จ่าย กำไร/ขาดทุน เวลา และงานของไรเดอร์ในแต่ละแผน</p>
+    </div>
+    <a routerLink="/dashboard">กลับ Dashboard</a>
+  </header>
+
+  <section class="panel selector">
+    <label>เลือกแผนจัดส่ง
+      <select name="selectedPlanId" [(ngModel)]="selectedPlanId">
+        <option [ngValue]="0">-- เลือกแผน --</option>
+        <option *ngFor="let item of plans" [ngValue]="item.plan_id">
+          #{{ item.plan_id }} · {{ item.delivery_date | date:'dd/MM/yyyy' }} ·
+          {{ item.route_count }} ไรเดอร์ · {{ item.order_count }} ออเดอร์
+        </option>
+      </select>
+    </label>
+    <button class="primary" type="button" (click)="loadPlan()" [disabled]="loadingDetail || !selectedPlanId">
+      {{ loadingDetail ? 'กำลังโหลด...' : 'ดูสรุป' }}
+    </button>
+    <span class="hint" *ngIf="loadingPlans">กำลังโหลดรายการแผน...</span>
+    <span class="hint" *ngIf="!loadingPlans && plans.length === 0">ยังไม่มีแผนจัดส่งที่บันทึก</span>
+  </section>
+
+  <p class="error" *ngIf="message" role="alert">{{ message }}</p>
+  <p class="hint" *ngIf="loadingDetail">กำลังโหลดรายละเอียดแผน...</p>
+
+  <ng-container *ngIf="plan as currentPlan">
+    <section class="summary-header">
+      <div>
+        <p class="eyebrow">PLAN #{{ currentPlan.plan_id }}</p>
+        <h2>วันที่ {{ currentPlan.delivery_date | date:'dd/MM/yyyy' }}</h2>
+        <p>สถานะ {{ currentPlan.status }} · {{ currentPlan.start_time }} – {{ currentPlan.end_time || 'ไม่ระบุเวลาสิ้นสุด' }}</p>
+      </div>
+      <a routerLink="/route-planning">สร้างแผนใหม่</a>
+    </section>
+
+    <section class="cards">
+      <article class="card"><span>ค่าใช้จ่ายรวม</span><strong>{{ currentPlan.total_cost | number:'1.2-2' }} บาท</strong></article>
+      <article class="card" [class.loss]="currentPlan.total_profit < 0">
+        <span>{{ currentPlan.total_profit < 0 ? 'ขาดทุน' : 'กำไร' }}</span>
+        <strong>{{ currentPlan.total_profit | number:'1.2-2' }} บาท</strong>
+      </article>
+      <article class="card"><span>เวลาโดยประมาณ</span><strong>{{ currentPlan.total_time_minutes | number }} นาที</strong></article>
+      <article class="card"><span>ระยะทางรวม</span><strong>{{ currentPlan.total_distance_km | number:'1.2-2' }} กม.</strong></article>
+      <article class="card"><span>ออเดอร์ / กล่อง</span><strong>{{ currentPlan.order_count }} / {{ currentPlan.total_boxes }}</strong></article>
+      <article class="card"><span>ไรเดอร์</span><strong>{{ currentPlan.route_count }} คน</strong></article>
+    </section>
+
+    <section class="panel">
+      <h2>ผลแยกตามไรเดอร์</h2>
+      <article class="rider-card" *ngFor="let route of currentPlan.routes">
+        <header class="rider-heading">
+          <span class="route-color" [style.backgroundColor]="route.route_color"></span>
+          <div class="rider-name">
+            <h3>{{ route.rider_name }}</h3>
+            <p>ใบงาน {{ route.work_no }} · {{ route.orders.length }} ออเดอร์ · {{ route.total_boxes }} กล่อง</p>
+          </div>
+          <div class="rider-totals">
+            <strong>{{ route.total_distance_km | number:'1.2-2' }} กม.</strong>
+            <span>{{ route.total_time_minutes }} นาที · ค่าใช้จ่าย {{ route.delivery_cost | number:'1.2-2' }} บาท</span>
+          </div>
+          <a [routerLink]="['/rider-map']" [queryParams]="{ rider_id: route.rider_id, work_no: route.work_no }">เปิดแผนที่</a>
+        </header>
+        <ol class="stops">
+          <li *ngFor="let stop of route.orders">
+            <span class="stop-number">{{ stop.stop_sequence }}</span>
+            <div>
+              <strong>ออเดอร์ #{{ stop.order_id }} — {{ stop.first_name }} {{ stop.last_name }}</strong>
+              <p>{{ stop.address || 'ไม่มีที่อยู่' }} · {{ stop.phone || 'ไม่มีเบอร์โทร' }}</p>
+              <small>{{ stop.box_quantity }} กล่อง · {{ stop.estimated_time | date:'HH:mm' }} · {{ stop.delivery_status }}</small>
+            </div>
+          </li>
+        </ol>
+      </article>
+      <p class="hint" *ngIf="currentPlan.routes.length === 0">แผนนี้ยังไม่มีข้อมูลเส้นทางไรเดอร์</p>
+      <p class="note">ระยะทางคำนวณด้วย {{ currentPlan.distance_method }} เป็นระยะเส้นตรง ไม่ใช่ระยะทางถนน</p>
+    </section>
+  </ng-container>
+</main>

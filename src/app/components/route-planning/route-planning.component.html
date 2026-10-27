@@ -2,89 +2,168 @@
   <header class="page-header">
     <div>
       <p class="eyebrow">ROUTE PLANNING</p>
-      <h1>วางแผนเส้นทาง</h1>
-      <p class="subtitle">เลือกไรเดอร์และออเดอร์ จากนั้นคำนวณและบันทึกแผนส่ง</p>
+      <h1>วางแผนเส้นทางไรเดอร์</h1>
+      <p class="subtitle">จัดออเดอร์ให้ไรเดอร์ คำนวณเส้นทางถนน และดูแต่ละเส้นทางแยกสี</p>
     </div>
     <a class="secondary link-button" routerLink="/rider-map">เปิดแผนที่ใบงาน</a>
   </header>
 
-  <section class="panel">
-    <h2>1. เลือกไรเดอร์และออเดอร์</h2>
-    <label class="rider-select">ไรเดอร์
-      <select name="riderId" [(ngModel)]="selectedRiderId">
-        <option [ngValue]="0">-- เลือกไรเดอร์ --</option>
-        <option *ngFor="let rider of availableRiders" [ngValue]="rider.rider_id">
-          #{{ rider.rider_id }} — {{ rider.rider_name }}
-        </option>
-      </select>
-    </label>
-
-    <p class="hint" *ngIf="loading">กำลังโหลดข้อมูล...</p>
-    <p class="hint" *ngIf="!loading && availableRiders.length === 0">
-      ไม่มีไรเดอร์ที่พร้อมรับงาน กรุณาตรวจสถานะในหน้าจัดการไรเดอร์
-    </p>
-    <p class="hint" *ngIf="availableOrders.length === 0">ไม่มีออเดอร์ที่รอจัดส่ง</p>
-
-    <div class="order-list">
-      <label class="order-option" *ngFor="let order of availableOrders">
-        <input type="checkbox"
-          [checked]="routeOrderIds.includes(order.order_id)"
-          [disabled]="!!assignment ||
-            (!routeOrderIds.includes(order.order_id) && routeOrderIds.length >= 3) ||
-            order.latitude === null || order.longitude === null"
-          (change)="toggleOrder(order)">
-        <span>
-          <strong>ออเดอร์ #{{ order.order_id }}</strong>
-          — {{ order.first_name }} {{ order.last_name }}
-          — {{ order.box_quantity }} กล่อง
-          <small>{{ order.address || 'ไม่มีที่อยู่' }}</small>
-        </span>
-      </label>
+  <section class="panel setup">
+    <div>
+      <h2>เพิ่มเส้นทางไรเดอร์</h2>
+      <p class="hint" *ngIf="loading">กำลังโหลดข้อมูลไรเดอร์...</p>
+      <p class="hint" *ngIf="!loading && availableRiders.length === 0">
+        ไม่มีไรเดอร์ที่พร้อมรับงาน กรุณาตรวจสอบสถานะไรเดอร์
+      </p>
     </div>
-    <p class="hint">เลือกได้ไม่เกิน 3 ออเดอร์ต่อไรเดอร์ตามข้อจำกัดของ Backend</p>
-    <div class="actions">
-      <button class="primary" type="button" (click)="calculateRoute()"
-        [disabled]="calculating || routeOrderIds.length === 0">
-        {{ calculating ? 'กำลังคำนวณ...' : 'คำนวณเส้นทาง' }}
-      </button>
-      <button class="secondary" type="button" (click)="clearRoute()">ล้างการเลือก</button>
+    <div class="add-route">
+      <label>เลือกไรเดอร์
+        <select name="riderId" [(ngModel)]="selectedRiderId">
+          <option [ngValue]="0">-- เลือกไรเดอร์ --</option>
+          <option *ngFor="let rider of availableRiders" [ngValue]="rider.rider_id"
+            [disabled]="hasRouteFor(rider.rider_id)">
+            #{{ rider.rider_id }} — {{ rider.rider_name }}
+          </option>
+        </select>
+      </label>
+      <button class="primary" type="button" (click)="addRoute()">เพิ่มเส้นทาง</button>
     </div>
   </section>
 
-  <section class="panel" *ngIf="routeOrderIds.length > 0">
-    <h2>2. ตรวจและเลือกลำดับจุดส่ง</h2>
-    <p class="hint">ระยะทางประมาณ {{ estimatedDistanceKm }} กม. เป็นระยะเส้นตรง ไม่ใช่ระยะถนน</p>
-    <ol class="route-list">
-      <li *ngFor="let order of routeOrders; let i = index">
-        <span class="stop-number">{{ i + 1 }}</span>
+  <p class="message" *ngIf="message" role="status">{{ message }}</p>
+
+  <section class="panel map-panel">
+    <div class="section-heading">
+      <div>
+        <h2>แผนที่เส้นทาง</h2>
+        <p class="hint">เลือกเส้นทางจากรายการเพื่อเน้นสีบนแผนที่</p>
+      </div>
+      <div class="legend" *ngIf="routes.length">
+        <button type="button" class="legend-item" *ngFor="let route of routes"
+          [class.selected]="selectedRouteId === route.id" (click)="selectRoute(route)">
+          <span class="legend-dot" [style.backgroundColor]="route.color"></span>
+          ไรเดอร์ #{{ route.riderId }}
+        </button>
+      </div>
+    </div>
+    <div #mapContainer class="map" aria-label="แผนที่เส้นทางไรเดอร์"></div>
+  </section>
+
+  <section class="panel orders-panel">
+    <div class="section-heading">
+      <div>
+        <h2>เลือกออเดอร์สำหรับวางแผน ({{ pendingOrders.length }})</h2>
+        <p class="hint">ออเดอร์เรียงตามระยะทางที่คาดว่าจะเพิ่มให้เส้นทาง เลือกไรเดอร์ด้านบนแล้วกดออเดอร์เพื่อเพิ่ม</p>
+      </div>
+      <label class="route-select" *ngIf="routes.length">
+        เส้นทางที่จะเพิ่มออเดอร์
+        <select name="selectedRouteId" [(ngModel)]="selectedRouteId">
+          <option *ngFor="let route of routes" [ngValue]="route.id">
+            ไรเดอร์ #{{ route.riderId }}
+            {{ riders.find(rider => rider.rider_id === route.riderId)?.rider_name }}
+          </option>
+        </select>
+      </label>
+    </div>
+
+    <p class="hint" *ngIf="loadingOrders">กำลังโหลดออเดอร์...</p>
+    <p class="error" *ngIf="orderLoadError" role="alert">{{ orderLoadError }}</p>
+    <p class="hint" *ngIf="!loadingOrders && !orderLoadError && pendingOrders.length === 0">
+      ไม่มีออเดอร์ที่รอจัดส่ง
+    </p>
+    <p class="hint" *ngIf="!routes.length && pendingOrders.length">
+      ยังไม่มีเส้นทาง ระบบจะสร้างเส้นทางให้เมื่อเลือกออเดอร์รายการแรก
+    </p>
+    <p class="hint" *ngIf="!availableRiders.length && pendingOrders.length">
+      ไม่มีไรเดอร์ที่พร้อมรับงาน กรุณาเพิ่มหรือเปลี่ยนสถานะไรเดอร์ก่อนเลือกออเดอร์
+    </p>
+
+    <div class="order-list" *ngIf="pendingOrders.length">
+      <label class="order-option" *ngFor="let order of ordersSortedByRoute"
+        [class.nearest]="order.order_id === nearestOrderId">
+        <input type="checkbox"
+          [checked]="isOrderSelected(order.order_id)"
+          [disabled]="!canToggleOrder(order)"
+          (change)="toggleSelectedOrder(order)">
+        <span>
+          <strong>ออเดอร์ #{{ order.order_id }}</strong>
+          <span class="nearest-badge" *ngIf="order.order_id === nearestOrderId">
+            ใกล้/เข้าทางที่สุด
+          </span>
+          — {{ order.first_name }} {{ order.last_name }} · {{ order.box_quantity }} กล่อง
+          <small>{{ order.address || 'ไม่มีที่อยู่' }}</small>
+          <small *ngIf="estimatedAddedDistanceKm(order) !== null">
+            เพิ่มระยะทางประมาณ {{ estimatedAddedDistanceKm(order) | number:'1.1-2' }} กม.
+          </small>
+          <small>
+            สถานะ: {{ order.status }} · พิกัด:
+            {{ order.latitude ?? 'ไม่มี' }}, {{ order.longitude ?? 'ไม่มี' }}
+          </small>
+        </span>
+      </label>
+    </div>
+    <p class="hint" *ngIf="availableOrders.length < pendingOrders.length">
+      ออเดอร์ที่ไม่มีพิกัดถูกปิดการเลือก เพราะไม่สามารถนำไปคำนวณเส้นทางได้
+    </p>
+    <p class="hint distance-note">
+    ปุ่มคำนวณเส้นทางจะใช้ข้อมูลถนนจาก OpenStreetMap ผ่าน OSRM เพื่อเรียงจุดส่งและวาดเส้นทาง ส่วนระยะเพิ่มในรายการออเดอร์เป็นค่าประมาณเส้นตรง
+    </p>
+  </section>
+
+  <section class="route-card panel" *ngFor="let route of routes"
+    [class.active]="selectedRouteId === route.id" [style.--route-color]="route.color">
+    <header class="route-heading">
+      <button type="button" class="route-title" (click)="selectRoute(route)">
+        <span class="route-dot" [style.backgroundColor]="route.color"></span>
+        <span>
+          <strong>ไรเดอร์ #{{ route.riderId }}</strong>
+          <small>{{ riders.find(rider => rider.rider_id === route.riderId)?.rider_name }}</small>
+        </span>
+      </button>
+      <span class="distance" *ngIf="route.calculated">{{ route.distanceKm | number:'1.1-2' }} กม.</span>
+      <button class="small danger" type="button" (click)="removeRoute(route)"
+        [disabled]="!!route.assignment || route.calculating || route.saving">
+        ลบเส้นทาง
+      </button>
+    </header>
+
+    <ol class="route-list" *ngIf="route.orderIds.length">
+      <li *ngFor="let order of ordersFor(route); let i = index">
+        <span class="stop-number" [style.backgroundColor]="route.color">{{ i + 1 }}</span>
         <span class="stop-info">
           <strong>#{{ order.order_id }} — {{ order.first_name }} {{ order.last_name }}</strong>
           <small>{{ order.address || 'ไม่มีที่อยู่' }}</small>
         </span>
         <span class="stop-actions">
-          <button type="button" class="small secondary" (click)="moveStop(i, -1)"
-            [disabled]="i === 0" aria-label="เลื่อนจุดส่งขึ้น">↑</button>
-          <button type="button" class="small secondary" (click)="moveStop(i, 1)"
-            [disabled]="i === routeOrders.length - 1" aria-label="เลื่อนจุดส่งลง">↓</button>
+          <button type="button" class="small secondary" (click)="moveStop(route, i, -1)"
+            [disabled]="!!route.assignment || i === 0" aria-label="เลื่อนจุดส่งขึ้น">↑</button>
+          <button type="button" class="small secondary" (click)="moveStop(route, i, 1)"
+            [disabled]="!!route.assignment || i === route.orderIds.length - 1"
+            aria-label="เลื่อนจุดส่งลง">↓</button>
         </span>
       </li>
     </ol>
-    <button class="primary" type="button" (click)="saveRoute()" [disabled]="saving || !!assignment">
-      {{ saving ? 'กำลังบันทึกแผน...' : (assignment ? 'บันทึกแผนแล้ว' : 'บันทึกและมอบหมายให้ไรเดอร์') }}
-    </button>
-    <p class="warning">การบันทึกจะสร้างแผนใน Backend และเปลี่ยนสถานะออเดอร์/ไรเดอร์ทันที ยังไม่มี API สำหรับแก้หรือลบแผนที่บันทึกแล้ว</p>
-  </section>
 
-  <section class="result" *ngIf="assignment">
-    <div>
-      <p class="eyebrow">SAVED DELIVERY PLAN</p>
-      <h2>ใบงาน {{ assignment.work_no }}</h2>
-      <p>ไรเดอร์ {{ assignment.rider_name }} · {{ assignment.orders.length }} จุดส่ง ·
-        {{ assignment.total_distance_km }} กม.</p>
+    <div class="actions">
+      <button class="primary" type="button" (click)="calculateRoute(route)"
+        [disabled]="route.calculating || !!route.assignment || route.orderIds.length === 0">
+        {{ route.calculating ? 'กำลังคำนวณ...' : 'คำนวณเส้นทางใหม่' }}
+      </button>
+      <button class="secondary" type="button" (click)="selectRoute(route)">เลือกเส้นทางนี้</button>
+      <button class="primary" type="button" (click)="saveRoute(route)"
+        [disabled]="route.saving || route.calculating || route.assignment || !route.calculated">
+        {{ route.saving ? 'กำลังบันทึก...' : 'บันทึกและมอบหมายงาน' }}
+      </button>
+      <button class="secondary" type="button" (click)="openMap(route)" *ngIf="route.assignment">
+        เปิดดูเส้นทาง
+      </button>
     </div>
-    <span class="route-color" [style.backgroundColor]="assignment.route_color"></span>
-    <button class="primary" type="button" (click)="openMap()">เปิดแผนที่เส้นทาง</button>
+    <p class="saved" *ngIf="route.assignment">
+      บันทึกใบงาน {{ route.assignment.work_no }} แล้ว
+    </p>
   </section>
 
-  <p class="message" *ngIf="message" role="status">{{ message }}</p>
+  <p class="empty panel" *ngIf="routes.length === 0">
+    เพิ่มเส้นทางและเลือกไรเดอร์เพื่อเริ่มจัดออเดอร์
+  </p>
 </main>

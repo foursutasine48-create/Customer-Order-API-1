@@ -1,0 +1,40 @@
+:host { display: block; color: #29243a; font-family: Arial, "Noto Sans Thai", sans-serif; }
+* { box-sizing: border-box; }
+.page { max-width: 1250px; min-height: 100vh; margin: 0 auto; padding: 28px; background: #f8f7fb; }
+.page-header, .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 18px; }
+.page-header { margin-bottom: 24px; }
+.eyebrow { margin: 0 0 6px; color: #4b70aa; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; }
+h1 { margin: 0; font-size: 28px; }
+h2 { margin: 0; font-size: 18px; }
+.subtitle, .section-heading p, .note { color: #777184; font-size: 14px; }
+button, a { font: inherit; }
+button { padding: 10px 14px; border: 0; border-radius: 8px; font-weight: 700; cursor: pointer; }
+.secondary { color: #4b5870; background: #edf1f7; }
+button:disabled { opacity: .6; cursor: not-allowed; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
+.card { display: grid; gap: 8px; padding: 18px; border: 1px solid #e8ebf2; border-radius: 14px; background: white; box-shadow: 0 4px 16px #102b4908; }
+.card span { color: #625d70; font-size: 14px; }
+.card strong { font-size: 27px; }
+.card small { color: #777184; }
+.blue { border-top: 4px solid #4b70aa; }
+.purple { border-top: 4px solid #8058b5; }
+.orange { border-top: 4px solid #dc8a36; }
+.green { border-top: 4px solid #3b9860; }
+.red { border-top: 4px solid #bd4d4d; }
+.teal { border-top: 4px solid #15959a; }
+.gray { border-top: 4px solid #798393; }
+.panel { padding: 22px; border: 1px solid #e7edf5; border-radius: 16px; background: white; box-shadow: 0 4px 16px #102b4908; }
+.section-heading { margin-bottom: 14px; }
+.section-heading p { margin: 6px 0 0; }
+a { color: #315d8b; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+th, td { padding: 12px; border-bottom: 1px solid #edf0f5; }
+th { color: #777184; font-size: 12px; }
+.empty { text-align: center; color: #777184; }
+.negative, .error { color: #a94242; }
+.message, .note { margin-top: 14px; }
+.quick-links { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+.quick-links a { padding: 10px 14px; border-radius: 8px; background: white; text-decoration: none; }
+@media (max-width: 800px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .page { padding: 16px; } .page-header, .section-heading { align-items: flex-start; flex-direction: column; } .cards { grid-template-columns: 1fr; } }
