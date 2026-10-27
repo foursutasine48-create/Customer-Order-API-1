@@ -1,0 +1,28 @@
+<main class="login-page">
+  <section class="panel">
+    <p class="eyebrow">RIDER JOB</p>
+    <h1>เปิดใบงาน</h1>
+    <p class="subtitle">เลือกไรเดอร์และกรอกเลขใบงานที่ได้รับจากผู้ดูแล</p>
+    <form (ngSubmit)="login()">
+      <label>ไรเดอร์
+        <select name="riderId" [(ngModel)]="riderId" required>
+          <option [ngValue]="0">-- เลือกชื่อไรเดอร์ --</option>
+          <option *ngFor="let rider of riders" [ngValue]="rider.rider_id">
+            #{{ rider.rider_id }} — {{ rider.rider_name }}
+          </option>
+        </select>
+      </label>
+      <label>เลขใบงาน
+        <input type="text" name="workNo" [(ngModel)]="workNo"
+          placeholder="เช่น JOB-20261027-A1B2C3" autocomplete="off" required>
+      </label>
+      <p class="hint" *ngIf="loadingRiders">กำลังโหลดรายชื่อไรเดอร์...</p>
+      <button class="primary" type="submit" [disabled]="checkingJob || loadingRiders">
+        {{ checkingJob ? 'กำลังตรวจสอบ...' : 'เปิดใบงาน' }}
+      </button>
+      <p class="message" *ngIf="message" role="alert">{{ message }}</p>
+    </form>
+    <a routerLink="/riders">กลับหน้าจัดการไรเดอร์</a>
+    <p class="hint">Backend ยังไม่มีระบบยืนยันตัวตน ใช้รหัสไรเดอร์และเลขใบงานเพื่อตรวจใบงานเท่านั้น</p>
+  </section>
+</main>

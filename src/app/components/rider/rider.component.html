@@ -1,0 +1,110 @@
+<main class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">RIDER MANAGEMENT</p>
+      <h1>จัดการไรเดอร์</h1>
+      <p class="subtitle">บันทึกข้อมูลกับ Backend และจัดงานส่งให้ไรเดอร์</p>
+    </div>
+    <a class="secondary link-button" routerLink="/rider-login">เข้าสู่หน้าไรเดอร์</a>
+  </header>
+
+  <section class="panel">
+    <h2>{{ editingId === null ? 'เพิ่มไรเดอร์' : 'แก้ไขข้อมูลไรเดอร์' }}</h2>
+    <form (ngSubmit)="saveRider()">
+      <div class="form-grid">
+        <label>ชื่อ-นามสกุล *
+          <input name="rider_name" [(ngModel)]="form.rider_name" required>
+        </label>
+        <label>เบอร์โทร *
+          <input name="phone" [(ngModel)]="form.phone" required>
+        </label>
+        <label>สถานะ
+          <select name="status" [(ngModel)]="form.status">
+            <option value="พร้อมรับงาน">พร้อมรับงาน</option>
+            <option value="ว่าง">ว่าง</option>
+            <option value="ไม่พร้อมรับงาน">ไม่พร้อมรับงาน</option>
+            <option value="กำลังส่ง">กำลังส่ง</option>
+          </select>
+        </label>
+      </div>
+      <div class="form-actions">
+        <button class="primary" type="submit" [disabled]="saving">
+          {{ saving ? 'กำลังบันทึก...' : (editingId === null ? 'เพิ่มไรเดอร์' : 'บันทึก') }}
+        </button>
+        <button class="secondary" type="button" (click)="cancelEdit()">ล้างฟอร์ม</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>รายชื่อไรเดอร์ ({{ riders.length }})</h2>
+    <p class="hint" *ngIf="loadingRiders">กำลังโหลดรายชื่อไรเดอร์...</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>รหัส</th><th>ชื่อ</th><th>เบอร์โทร</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let rider of riders">
+            <td>#{{ rider.rider_id }}</td>
+            <td>{{ rider.rider_name }}</td>
+            <td>{{ rider.phone }}</td>
+            <td>{{ rider.status }}</td>
+            <td class="actions">
+              <button class="small edit" type="button" (click)="editRider(rider)">แก้ไข</button>
+              <button class="small secondary" type="button" (click)="changeStatus(rider)"
+                [disabled]="rider.status === 'กำลังส่ง'">
+                {{ isAvailable(rider) ? 'พักงาน' : 'พร้อมรับงาน' }}
+              </button>
+              <button class="small delete" type="button" (click)="deleteRider(rider)"
+                [disabled]="deletingRiderId !== null">
+                {{ deletingRiderId === rider.rider_id ? 'กำลังลบ...' : 'ลบ' }}
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="!loadingRiders && riders.length === 0">
+            <td colspan="5" class="empty">ยังไม่มีข้อมูลไรเดอร์</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>มอบหมายใบงาน (เลือกได้ไม่เกิน 3 ออเดอร์)</h2>
+    <div class="assign-form">
+      <label>ไรเดอร์
+        <select name="selectedRiderId" [(ngModel)]="selectedRiderId">
+          <option [ngValue]="0">-- เลือกไรเดอร์ --</option>
+          <option *ngFor="let rider of riders" [ngValue]="rider.rider_id" [disabled]="!isAvailable(rider)">
+            {{ rider.rider_name }} — {{ rider.status }}
+          </option>
+        </select>
+      </label>
+    </div>
+    <p class="hint" *ngIf="availableOrders.length === 0">ไม่มีออเดอร์ที่ยังไม่ถูกจัดส่ง</p>
+    <div class="order-list" *ngIf="availableOrders.length > 0">
+      <label class="order-option" *ngFor="let order of availableOrders">
+        <input type="checkbox"
+          [checked]="selectedOrderIds.includes(order.order_id)"
+          [disabled]="!selectedOrderIds.includes(order.order_id) && selectedOrderIds.length >= 3"
+          (change)="toggleOrder(order.order_id)">
+        <span>
+          <strong>ออเดอร์ #{{ order.order_id }}</strong>
+          — {{ order.first_name }} {{ order.last_name }}
+          — {{ order.box_quantity }} กล่อง
+        </span>
+      </label>
+    </div>
+    <button class="primary assign-button" type="button" (click)="assignOrders()"
+      [disabled]="assigning || selectedOrderIds.length === 0">
+      {{ assigning ? 'กำลังมอบหมาย...' : 'มอบหมายงาน (' + selectedOrderIds.length + ')' }}
+    </button>
+
+    <section class="assignment-result" *ngIf="lastAssignment">
+      <h3>สร้างใบงานสำเร็จ</h3>
+      <p>เลขใบงาน: <strong>{{ lastAssignment.work_no }}</strong></p>
+      <p>ระยะทางประมาณ {{ lastAssignment.total_distance_km }} กม. · {{ lastAssignment.total_boxes }} กล่อง</p>
+      <p>ส่งเลขใบงานและรหัสไรเดอร์ให้ไรเดอร์เพื่อเข้าสู่ระบบ</p>
+    </section>
+    <p class="message" *ngIf="message" role="status">{{ message }}</p>
+  </section>
+</main>
