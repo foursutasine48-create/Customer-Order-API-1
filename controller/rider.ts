@@ -229,7 +229,7 @@ router.post("/:id/assignments", async (req, res) => {
     );
     const planId = planResult.insertId;
     const workNo = requestedWorkNo?.trim()
-      ?? `JOB-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
+      ?? randomBytes(4).toString("hex").toUpperCase();
     const color = plannedRoute.route_color;
 
     const [routeResult]: any = await connection.query(
@@ -345,6 +345,77 @@ router.post("/job-lookup", async (req, res) => {
   } catch (error) {
     console.error("Failed to look up rider job:", error);
     res.status(500).json({ message: "ไม่สามารถค้นหาใบงานได้" });
+  }
+});
+
+// PATCH /rider/job-delivered  body: { rider_id, work_no, order_id }
+router.patch("/job-delivered", async (req, res) => {
+  const { rider_id, work_no, order_id } = req.body ?? {};
+  if (
+    !isPositiveInteger(rider_id) ||
+    !isPositiveInteger(order_id) ||
+    typeof work_no !== "string" ||
+    !work_no.trim()
+  ) {
+    return res.status(400).json({ message: "กรุณาระบุ rider_id, work_no และ order_id ให้ถูกต้อง" });
+  }
+
+  let connection: Awaited<ReturnType<typeof conn.getConnection>> | undefined;
+  let transactionStarted = false;
+  try {
+    connection = await conn.getConnection();
+    await connection.beginTransaction();
+    transactionStarted = true;
+
+    const [stops]: any = await connection.query(
+      `SELECT rr.route_id
+         FROM Rider_Route rr
+         JOIN Route_Stop rs ON rs.route_id = rr.route_id
+        WHERE rr.rider_id = ? AND rr.work_no = ? AND rs.order_id = ?
+        FOR UPDATE`,
+      [rider_id, work_no.trim(), order_id]
+    );
+    if (!stops.length) {
+      await connection.rollback();
+      transactionStarted = false;
+      return res.status(404).json({ message: "ไม่พบออเดอร์ในใบงานนี้" });
+    }
+
+    await connection.query(
+      "UPDATE Route_Stop SET delivery_status = ? WHERE route_id = ? AND order_id = ?",
+      ["จัดส่งแล้ว", stops[0].route_id, order_id]
+    );
+    await connection.query(
+      "UPDATE `Order` SET status = ? WHERE order_id = ?",
+      ["จัดส่งแล้ว", order_id]
+    );
+    const [remainingStops]: any = await connection.query(
+      "SELECT COUNT(*) AS remaining FROM Route_Stop WHERE route_id = ? AND delivery_status <> ?",
+      [stops[0].route_id, "จัดส่งแล้ว"]
+    );
+    const riderStatus = Number(remainingStops[0].remaining) === 0
+      ? "พร้อมรับงาน"
+      : "กำลังส่ง";
+    await connection.query(
+      "UPDATE Rider SET status = ? WHERE rider_id = ?",
+      [riderStatus, rider_id]
+    );
+
+    await connection.commit();
+    transactionStarted = false;
+    res.json({
+      rider_id,
+      order_id,
+      delivery_status: "จัดส่งแล้ว",
+      order_status: "จัดส่งแล้ว",
+      rider_status: riderStatus,
+    });
+  } catch (error) {
+    if (transactionStarted) await connection?.rollback();
+    console.error("Failed to mark rider order as delivered:", error);
+    res.status(500).json({ message: "ไม่สามารถบันทึกสถานะจัดส่งได้" });
+  } finally {
+    connection?.release();
   }
 });
 
