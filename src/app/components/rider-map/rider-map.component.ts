@@ -201,6 +201,17 @@ export class RiderMapComponent implements OnInit, OnDestroy {
     });
   }
 
+  formatEstimatedTime(estimatedTime: string): string {
+    return estimatedTime.split(' ').at(-1)?.slice(0, 5) ?? estimatedTime;
+  }
+
+  isStopOnTime(estimatedTime: string): boolean {
+    const time = estimatedTime.split(' ').at(-1)?.split(':');
+    if (!time || time.length < 2) return false;
+    const minutes = Number(time[0]) * 60 + Number(time[1]);
+    return Number.isFinite(minutes) && minutes <= 12 * 60 + 30;
+  }
+
   private showRouteOnMap(): void {
     if (!this.map || !this.routeLayer || !this.job) return;
 

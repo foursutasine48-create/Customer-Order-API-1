@@ -25,6 +25,7 @@ export interface RiderRouteStop {
   segment_distance_km: number;
   estimated_time: string;
   delivery_status?: string;
+  on_time?: boolean;
 }
 
 export interface RiderJob {

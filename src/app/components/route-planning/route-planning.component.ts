@@ -10,8 +10,9 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { finalize, switchMap } from 'rxjs';
+import { finalize, forkJoin, Observable, switchMap } from 'rxjs';
 import * as L from 'leaflet';
+import { DeliveryPlanPreview } from '../../models/delivery-plan.model';
 import { CustomerOrder } from '../../models/order.model';
 import { Rider, RiderAssignment } from '../../models/rider.model';
 import { ApiService } from '../../services/api';
@@ -53,6 +54,11 @@ export class RoutePlanningComponent implements OnInit, AfterViewInit, OnDestroy 
   orderLoadError = '';
   message = '';
   loading = false;
+  autoPlanning = false;
+  previewing = false;
+  savingPlan = false;
+  alternativeNumber = 0;
+  planPreview: DeliveryPlanPreview | null = null;
 
   private map?: L.Map;
   private routeLayer?: L.LayerGroup;
@@ -93,8 +99,19 @@ export class RoutePlanningComponent implements OnInit, AfterViewInit, OnDestroy 
     );
   }
 
+  get unassignedAvailableOrders(): RoutableOrder[] {
+    const assignedOrderIds = new Set(
+      this.routes.filter(route => route.assignment).flatMap(route => route.orderIds)
+    );
+    return this.availableOrders.filter(order => !assignedOrderIds.has(order.order_id));
+  }
+
   get selectedRoute(): RouteDraft | undefined {
     return this.routes.find(route => route.id === this.selectedRouteId);
+  }
+
+  get previewOrderCount(): number {
+    return this.planPreview?.routes.reduce((sum, route) => sum + route.orders.length, 0) ?? 0;
   }
 
   get nearestOrderId(): number | null {
@@ -212,6 +229,7 @@ export class RoutePlanningComponent implements OnInit, AfterViewInit, OnDestroy 
   }
 
   addRoute(): void {
+    if (this.autoPlanning || this.previewing || this.savingPlan) return;
     const riderId = Number(this.selectedRiderId);
     const rider = this.availableRiders.find(item => item.rider_id === riderId);
     if (!rider) {
@@ -237,6 +255,7 @@ export class RoutePlanningComponent implements OnInit, AfterViewInit, OnDestroy 
       assignment: null
     };
     this.routes = [...this.routes, route];
+    this.planPreview = null;
     this.selectedRouteId = route.id;
     this.message = '';
   }
@@ -259,7 +278,7 @@ export class RoutePlanningComponent implements OnInit, AfterViewInit, OnDestroy 
   }
 
   toggleOrder(route: RouteDraft, order: RoutableOrder): void {
-    if (route.assignment) return;
+    if (route.assignment || this.autoPlanning || this.previewing || this.savingPlan) return;
     if (route.orderIds.includes(order.order_id)) {
       route.orderIds = route.orderIds.filter(id => id !== order.order_id);
     } else {
@@ -283,6 +302,7 @@ export class RoutePlanningComponent implements OnInit, AfterViewInit, OnDestroy 
   }
 
   canToggleOrder(order: CustomerOrder): boolean {
+    if (this.autoPlanning || this.previewing || this.savingPlan) return false;
     const route = this.selectedRoute;
     if (order.latitude === null || order.longitude === null ||
       !this.validCoordinates(order.latitude, order.longitude)) {
@@ -310,6 +330,7 @@ export class RoutePlanningComponent implements OnInit, AfterViewInit, OnDestroy 
   }
 
   calculateRoute(route: RouteDraft): void {
+    if (this.autoPlanning || this.previewing || this.savingPlan) return;
     const stops = this.ordersFor(route);
     if (stops.length === 0) {
       this.message = 'เลือกออเดอร์อย่างน้อย 1 รายการก่อนคำนวณ';
@@ -318,7 +339,231 @@ export class RoutePlanningComponent implements OnInit, AfterViewInit, OnDestroy 
 
     route.calculating = true;
     this.message = '';
-    this.routeService.getRoadDistanceMatrix(SHOP_CENTER, stops).pipe(
+    this.calculateRoadRoute(route).pipe(
+      finalize(() => {
+        route.calculating = false;
+        this.changeDetector.markForCheck();
+      })
+    ).subscribe({
+      next: calculated => {
+        this.applyCalculatedRoute(route, calculated);
+        this.message = `คำนวณเส้นทางถนนสำหรับไรเดอร์ #${route.riderId} แล้ว`;
+      },
+      error: error => {
+        this.message = error instanceof Error
+          ? error.message
+          : CustomerOrderService.errorMessage(error);
+        this.changeDetector.markForCheck();
+      }
+    });
+  }
+
+  createAutomaticPlan(alternative = false): void {
+    const riders = this.availableRiders
+      .filter(rider => !this.routes.some(route => route.assignment?.rider_id === rider.rider_id))
+      .sort((a, b) => a.rider_id - b.rider_id);
+    const assignedOrderIds = new Set(
+      this.routes.filter(route => route.assignment).flatMap(route => route.orderIds)
+    );
+    const missingCoordinates = this.pendingOrders.filter(order =>
+      !assignedOrderIds.has(order.order_id) &&
+      (order.latitude === null || order.longitude === null ||
+        !this.validCoordinates(order.latitude, order.longitude))
+    );
+    if (missingCoordinates.length > 0) {
+      this.message = `มีออเดอร์ที่ไม่มีพิกัด (${missingCoordinates.map(order => `#${order.order_id}`).join(', ')}) กรุณาแก้ข้อมูลก่อนแบ่งงาน`;
+      return;
+    }
+
+    const orders = this.unassignedAvailableOrders;
+    if (orders.length === 0) {
+      this.message = 'ไม่มีออเดอร์ที่ยังไม่ได้มอบหมาย';
+      return;
+    }
+    const requiredRiders = Math.ceil(orders.length / 3);
+    if (riders.length < requiredRiders) {
+      this.message = `ออเดอร์ ${orders.length} รายการต้องใช้ไรเดอร์พร้อมรับงานอย่างน้อย ${requiredRiders} คน (ตอนนี้มี ${riders.length} คน)`;
+      return;
+    }
+
+    const unsavedRoutes = this.routes.filter(route => !route.assignment);
+    if (unsavedRoutes.length > 0 && !alternative &&
+      unsavedRoutes.some(route => route.orderIds.length > 0) &&
+      !confirm('การแบ่งงานอัตโนมัติจะแทนที่เส้นทางที่ยังไม่ได้บันทึก ต้องการทำต่อหรือไม่?')) {
+      return;
+    }
+
+    this.autoPlanning = true;
+    this.previewing = false;
+    this.planPreview = null;
+    this.message = 'กำลังแบ่งออเดอร์ตามพื้นที่และคำนวณระยะทางถนน...';
+    const variant = alternative ? this.alternativeNumber + 1 : 0;
+    const retainedRoutes = this.routes.filter(route => !!route.assignment);
+    if (alternative) {
+      const generatedRoutes = this.buildAutomaticDrafts(orders, riders, variant);
+      this.calculateGeneratedRoutes(generatedRoutes, retainedRoutes, orders.length, variant);
+      return;
+    }
+
+    this.api.autoDeliveryPlan(
+      orders.map(order => order.order_id),
+      riders.map(rider => rider.rider_id)
+    ).subscribe({
+      next: automaticPlan => {
+        const generatedRoutes = automaticPlan.routes.map((plannedRoute, index) => {
+          const routeOrders = plannedRoute.orders
+            .map(stop => this.orders.find(order => order.order_id === stop.order_id))
+            .filter((order): order is RoutableOrder =>
+              order !== undefined &&
+              order.latitude !== null &&
+              order.longitude !== null &&
+              this.validCoordinates(order.latitude, order.longitude)
+            );
+          const id = this.nextRouteId++;
+          return {
+            id,
+            riderId: plannedRoute.rider_id,
+            stops: routeOrders,
+            orderIds: plannedRoute.orders.map(stop => stop.order_id),
+            distanceKm: 0,
+            roadGeometry: [],
+            color: plannedRoute.route_color || this.routeColor(index),
+            calculated: false,
+            calculating: true,
+            saving: false,
+            assignment: null
+          };
+        });
+        this.calculateGeneratedRoutes(generatedRoutes, retainedRoutes, orders.length, variant);
+      },
+      error: error => {
+        this.autoPlanning = false;
+        this.message = CustomerOrderService.errorMessage(error);
+        this.changeDetector.markForCheck();
+      }
+    });
+  }
+
+  private calculateGeneratedRoutes(
+    generatedRoutes: RouteDraft[],
+    retainedRoutes: RouteDraft[],
+    orderCount: number,
+    variant: number
+  ): void {
+    this.routes = [...retainedRoutes, ...generatedRoutes];
+    this.alternativeNumber = variant;
+    this.selectedRouteId = generatedRoutes[0]?.id ?? retainedRoutes[0]?.id ?? null;
+    this.updateMap();
+
+    forkJoin(generatedRoutes.map(route => this.calculateRoadRoute(route))).pipe(
+      finalize(() => {
+        this.autoPlanning = false;
+        this.changeDetector.markForCheck();
+      })
+    ).subscribe({
+      next: calculatedRoutes => {
+        generatedRoutes.forEach((route, index) => {
+          this.applyCalculatedRoute(route, calculatedRoutes[index]);
+        });
+        this.message = `สร้างทางเลือกที่ ${variant + 1} แล้ว แบ่ง ${orderCount} ออเดอร์ให้ ${generatedRoutes.length} ไรเดอร์ตามกลุ่มพื้นที่ กรุณาตรวจแผนแล้วกดตรวจเวลาและกำไร`;
+        this.changeDetector.markForCheck();
+      },
+      error: error => {
+        generatedRoutes.forEach(route => {
+          route.calculating = false;
+          this.invalidateRoute(route);
+        });
+        this.message = error instanceof Error
+          ? `คำนวณเส้นทางอัตโนมัติไม่สำเร็จ: ${error.message}`
+          : CustomerOrderService.errorMessage(error);
+        this.changeDetector.markForCheck();
+      }
+    });
+  }
+
+  previewPlan(): void {
+    const routes = this.routes.filter(route => !route.assignment);
+    if (routes.length === 0 || routes.some(route => !route.calculated || route.orderIds.length === 0)) {
+      this.message = 'คำนวณเส้นทางให้ครบทุกไรเดอร์ก่อนตรวจเวลาและกำไร';
+      return;
+    }
+
+    this.previewing = true;
+    this.planPreview = null;
+    this.api.previewDeliveryPlan(routes.map(route => ({
+      rider_id: route.riderId,
+      order_ids: route.orderIds
+    }))).pipe(finalize(() => {
+      this.previewing = false;
+      this.changeDetector.markForCheck();
+    })).subscribe({
+      next: preview => {
+        this.planPreview = preview;
+        this.message = preview.on_time
+          ? 'แผนประเมินว่าทุกเส้นทางถึงก่อน 12:30 น.'
+          : 'คำเตือน: มีเส้นทางที่ประเมินว่าจะถึงหลัง 12:30 น.';
+        this.changeDetector.markForCheck();
+      },
+      error: error => {
+        this.message = CustomerOrderService.errorMessage(error);
+        this.changeDetector.markForCheck();
+      }
+    });
+  }
+
+  savePlan(): void {
+    const routes = this.routes.filter(route => !route.assignment);
+    if (!this.planPreview || routes.length === 0) {
+      this.message = 'ตรวจแผนและกำไรก่อนบันทึก';
+      return;
+    }
+    if (routes.some(route => !route.calculated || route.orderIds.length === 0)) {
+      this.message = 'คำนวณเส้นทางให้ครบทุกไรเดอร์ก่อนบันทึก';
+      return;
+    }
+
+    this.savingPlan = true;
+    this.api.confirmDeliveryPlan(routes.map(route => ({
+      rider_id: route.riderId,
+      order_ids: route.orderIds
+    }))).pipe(finalize(() => {
+      this.savingPlan = false;
+      this.changeDetector.markForCheck();
+    })).subscribe({
+      next: result => {
+        for (const savedRoute of result.routes) {
+          const route = routes.find(item => item.riderId === savedRoute.rider_id);
+          if (!route) continue;
+          route.assignment = {
+            ...savedRoute,
+            total_boxes: savedRoute.total_boxes,
+            total_distance_km: savedRoute.total_distance_km,
+            total_time_minutes: savedRoute.total_time_minutes,
+            delivery_cost: savedRoute.delivery_cost,
+            orders: savedRoute.orders
+          };
+        }
+        this.planPreview = null;
+        this.orders = this.orders.map(order =>
+          routes.some(route => route.orderIds.includes(order.order_id))
+            ? { ...order, status: 'กำลังจัดส่ง' }
+            : order
+        );
+        this.message = `บันทึกแผน #${result.plan_id} แล้ว`;
+        this.changeDetector.markForCheck();
+      },
+      error: error => {
+        this.message = CustomerOrderService.errorMessage(error);
+        this.changeDetector.markForCheck();
+      }
+    });
+  }
+
+  private calculateRoadRoute(route: RouteDraft): Observable<RiderRoute> {
+    const stops = this.ordersFor(route);
+    if (stops.length === 0) throw new Error('เลือกออเดอร์ก่อนคำนวณเส้นทาง');
+
+    return this.routeService.getRoadDistanceMatrix(SHOP_CENTER, stops).pipe(
       switchMap(distances => {
         const remaining = stops.map((_, index) => index);
         const ordered: RoutableOrder[] = [];
@@ -345,33 +590,79 @@ export class RoutePlanningComponent implements OnInit, AfterViewInit, OnDestroy 
           roadGeometry: []
         };
         return this.routeService.getRoadRoute(SHOP_CENTER, draft);
-      }),
-      finalize(() => {
-        route.calculating = false;
-        this.changeDetector.markForCheck();
       })
-    ).subscribe({
-      next: calculated => {
-        route.orderIds = calculated.stops.map(stop => stop.order_id);
-        route.stops = calculated.stops;
-        route.distanceKm = calculated.distanceKm;
-        route.roadGeometry = calculated.roadGeometry;
-        route.calculated = true;
-        this.updateMap();
-        this.message = `คำนวณเส้นทางสำหรับไรเดอร์ #${route.riderId} แล้ว`;
-        this.changeDetector.markForCheck();
-      },
-      error: error => {
-        this.message = error instanceof Error
-          ? error.message
-          : CustomerOrderService.errorMessage(error);
-        this.changeDetector.markForCheck();
-      }
+    );
+  }
+
+  private buildAutomaticDrafts(
+    orders: RoutableOrder[],
+    riders: Rider[],
+    variant: number
+  ): RouteDraft[] {
+    const sorted = [...orders].sort((a, b) =>
+      Math.atan2(a.latitude - SHOP_CENTER.latitude, a.longitude - SHOP_CENTER.longitude) -
+      Math.atan2(b.latitude - SHOP_CENTER.latitude, b.longitude - SHOP_CENTER.longitude)
+    );
+    const gapAfter = sorted.reduce((bestIndex, order, index) => {
+      const next = sorted[(index + 1) % sorted.length];
+      const currentAngle = Math.atan2(
+        order.latitude - SHOP_CENTER.latitude,
+        order.longitude - SHOP_CENTER.longitude
+      );
+      let nextAngle = Math.atan2(
+        next.latitude - SHOP_CENTER.latitude,
+        next.longitude - SHOP_CENTER.longitude
+      );
+      if (index === sorted.length - 1) nextAngle += Math.PI * 2;
+      let bestAngle = Math.atan2(
+        sorted[bestIndex].latitude - SHOP_CENTER.latitude,
+        sorted[bestIndex].longitude - SHOP_CENTER.longitude
+      );
+      let bestNext = Math.atan2(
+        sorted[(bestIndex + 1) % sorted.length].latitude - SHOP_CENTER.latitude,
+        sorted[(bestIndex + 1) % sorted.length].longitude - SHOP_CENTER.longitude
+      );
+      if (bestIndex === sorted.length - 1) bestNext += Math.PI * 2;
+      if (bestNext < bestAngle) bestNext += Math.PI * 2;
+      return nextAngle - currentAngle > bestNext - bestAngle ? index : bestIndex;
+    }, 0);
+    const start = (gapAfter + 1 + variant) % sorted.length;
+    const rotated = [...sorted.slice(start), ...sorted.slice(0, start)];
+    const groups: RoutableOrder[][] = [];
+    for (let index = 0; index < rotated.length; index += 3) {
+      groups.push(rotated.slice(index, index + 3));
+    }
+    return groups.map((group, index) => {
+      const id = this.nextRouteId++;
+      return {
+        id,
+        riderId: riders[index].rider_id,
+        stops: group,
+        orderIds: group.map(order => order.order_id),
+        distanceKm: 0,
+        roadGeometry: [],
+        color: this.routeColor(index),
+        calculated: false,
+        calculating: true,
+        saving: false,
+        assignment: null
+      };
     });
   }
 
+  private applyCalculatedRoute(route: RouteDraft, calculated: RiderRoute): void {
+    route.orderIds = calculated.stops.map(stop => stop.order_id);
+    route.stops = calculated.stops;
+    route.distanceKm = calculated.distanceKm;
+    route.roadGeometry = calculated.roadGeometry;
+    route.calculated = true;
+    route.calculating = false;
+    this.planPreview = null;
+    this.updateMap();
+  }
+
   moveStop(route: RouteDraft, index: number, direction: -1 | 1): void {
-    if (route.assignment) return;
+    if (route.assignment || this.autoPlanning || this.previewing || this.savingPlan) return;
     const nextIndex = index + direction;
     if (nextIndex < 0 || nextIndex >= route.orderIds.length) return;
 
@@ -393,34 +684,6 @@ export class RoutePlanningComponent implements OnInit, AfterViewInit, OnDestroy 
     }
   }
 
-  saveRoute(route: RouteDraft): void {
-    const rider = this.riders.find(item => item.rider_id === route.riderId);
-    if (!rider || !this.availableRiders.some(item => item.rider_id === rider.rider_id)) {
-      this.message = 'ไรเดอร์คนนี้ไม่พร้อมรับงานแล้ว กรุณาโหลดหน้าใหม่';
-      return;
-    }
-    if (!route.calculated || route.orderIds.length === 0 || route.orderIds.length > 3) {
-      this.message = 'คำนวณเส้นทางและเลือกออเดอร์ 1 ถึง 3 รายการก่อนบันทึก';
-      return;
-    }
-
-    route.saving = true;
-    this.api.assignRiderOrders(route.riderId, route.orderIds).pipe(finalize(() => {
-      route.saving = false;
-      this.changeDetector.markForCheck();
-    })).subscribe({
-      next: assignment => {
-        route.assignment = assignment;
-        this.message = `บันทึกเส้นทาง ${assignment.work_no} แล้ว`;
-        this.changeDetector.markForCheck();
-      },
-      error: error => {
-        this.message = CustomerOrderService.errorMessage(error);
-        this.changeDetector.markForCheck();
-      }
-    });
-  }
-
   openMap(route: RouteDraft): void {
     if (!route.assignment) return;
     this.router.navigate(['/rider-map'], {
@@ -432,7 +695,7 @@ export class RoutePlanningComponent implements OnInit, AfterViewInit, OnDestroy 
   }
 
   removeRoute(route: RouteDraft): void {
-    if (route.assignment) return;
+    if (route.assignment || this.autoPlanning || this.previewing || this.savingPlan) return;
     this.routes = this.routes.filter(item => item.id !== route.id);
     if (this.selectedRouteId === route.id) {
       this.selectedRouteId = this.routes[0]?.id ?? null;
@@ -445,6 +708,22 @@ export class RoutePlanningComponent implements OnInit, AfterViewInit, OnDestroy 
     route.stops = this.ordersFor(route);
     route.roadGeometry = [];
     route.distanceKm = 0;
+    this.planPreview = null;
+  }
+
+  previewForRoute(riderId: number) {
+    return this.planPreview?.routes.find(route => route.rider_id === riderId);
+  }
+
+  isOnTime(estimatedTime: string): boolean {
+    const time = estimatedTime.split(' ').at(-1)?.split(':');
+    if (!time || time.length < 2) return false;
+    const minutes = Number(time[0]) * 60 + Number(time[1]);
+    return Number.isFinite(minutes) && minutes <= 12 * 60 + 30;
+  }
+
+  formatEstimatedTime(estimatedTime: string): string {
+    return estimatedTime.split(' ').at(-1)?.slice(0, 5) ?? estimatedTime;
   }
 
   private updateMap(): void {

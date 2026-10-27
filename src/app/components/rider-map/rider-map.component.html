@@ -71,6 +71,8 @@
           <p>{{ stop.address || 'ไม่มีที่อยู่' }}</p>
           <p>{{ stop.phone || 'ไม่มีเบอร์โทร' }} · {{ stop.box_quantity }} กล่อง</p>
           <p>สถานะ: {{ stop.delivery_status || 'รอส่ง' }}</p>
+          <p>ถึงประมาณ {{ formatEstimatedTime(stop.estimated_time) }} ·
+            {{ isStopOnTime(stop.estimated_time) ? 'ทัน 12:30 น.' : 'เลย 12:30 น.' }}</p>
         </div>
         <button type="button" class="delivered-button"
           (click)="markDelivered(stop.order_id)"

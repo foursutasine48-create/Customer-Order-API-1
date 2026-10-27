@@ -71,7 +71,8 @@
             <div>
               <strong>ออเดอร์ #{{ stop.order_id }} — {{ stop.first_name }} {{ stop.last_name }}</strong>
               <p>{{ stop.address || 'ไม่มีที่อยู่' }} · {{ stop.phone || 'ไม่มีเบอร์โทร' }}</p>
-              <small>{{ stop.box_quantity }} กล่อง · {{ stop.estimated_time | date:'HH:mm' }} · {{ stop.delivery_status }}</small>
+              <small>{{ stop.box_quantity }} กล่อง · {{ stop.estimated_time | date:'HH:mm' }} ·
+                {{ stop.delivery_status }} · {{ stop.on_time === false ? 'เลย 12:30 น.' : 'ทัน 12:30 น.' }}</small>
             </div>
           </li>
         </ol>

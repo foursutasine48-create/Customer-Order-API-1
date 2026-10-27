@@ -38,6 +38,49 @@ export interface DeliveryPlanRoute {
   orders: RiderRouteStop[];
 }
 
+export interface DeliveryPlanPreviewRoute {
+  rider_id: number;
+  rider_name: string;
+  route_color: string;
+  total_distance_km: number;
+  total_time_minutes: number;
+  total_boxes: number;
+  delivery_cost: number;
+  food_cost: number;
+  revenue: number;
+  profit: number;
+  on_time: boolean;
+  orders: Array<RiderRouteStop & { on_time?: boolean }>;
+}
+
+export interface DeliveryPlanPreview {
+  deadline_time?: string;
+  total_distance_km: number;
+  total_time_minutes: number;
+  total_boxes: number;
+  delivery_cost: number;
+  food_cost: number;
+  revenue: number;
+  profit: number;
+  on_time: boolean;
+  routes: DeliveryPlanPreviewRoute[];
+}
+
+export interface AutomaticDeliveryPlanPreview extends DeliveryPlanPreview {
+  confirmation_request: {
+    routes: Array<{ rider_id: number; order_ids: number[] }>;
+  };
+}
+
+export interface ConfirmedDeliveryPlan extends DeliveryPlanPreview {
+  plan_id: number;
+  routes: Array<DeliveryPlanPreviewRoute & {
+    plan_id: number;
+    route_id: number;
+    work_no: string;
+  }>;
+}
+
 export interface DeliveryPlanDetail extends DeliveryPlanListItem {
   total_profit: number;
   distance_method: string;

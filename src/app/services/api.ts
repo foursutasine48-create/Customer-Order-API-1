@@ -2,6 +2,9 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  AutomaticDeliveryPlanPreview,
+  ConfirmedDeliveryPlan,
+  DeliveryPlanPreview,
   DeliveryPlanDetail,
   DeliveryPlanListItem,
   DeliveryPlanSummary
@@ -187,5 +190,23 @@ export class ApiService {
 
   getDeliveryPlan(planId: number): Observable<DeliveryPlanDetail> {
     return this.http.get<DeliveryPlanDetail>(`${API_URL}/delivery-plan/${planId}`);
+  }
+
+  previewDeliveryPlan(routes: Array<{ rider_id: number; order_ids: number[] }>): Observable<DeliveryPlanPreview> {
+    return this.http.post<DeliveryPlanPreview>(`${API_URL}/delivery-plan/preview`, { routes });
+  }
+
+  confirmDeliveryPlan(routes: Array<{ rider_id: number; order_ids: number[] }>): Observable<ConfirmedDeliveryPlan> {
+    return this.http.post<ConfirmedDeliveryPlan>(`${API_URL}/delivery-plan/confirm`, { routes });
+  }
+
+  autoDeliveryPlan(
+    orderIds: number[],
+    riderIds: number[]
+  ): Observable<AutomaticDeliveryPlanPreview> {
+    return this.http.post<AutomaticDeliveryPlanPreview>(`${API_URL}/delivery-plan/auto`, {
+      order_ids: orderIds,
+      rider_ids: riderIds
+    });
   }
 }
