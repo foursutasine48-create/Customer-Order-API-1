@@ -5,16 +5,12 @@ import { CustomerOrder } from '../models/order.model';
 
 export interface RiderRoute {
   riderId: number;
-  stops: CustomerOrder[];
+  stops: RoutableOrder[];
   distanceKm: number;
   roadGeometry: [number, number][];
 }
 
-export interface RoutePlan {
-  origin: { latitude: number; longitude: number };
-  routes: RiderRoute[];
-  unassignedOrders: number;
-}
+export type RoutableOrder = CustomerOrder & { latitude: number; longitude: number };
 
 interface OsrmRouteResponse {
   code: string;
@@ -36,34 +32,6 @@ interface OsrmTableResponse {
 @Injectable({ providedIn: 'root' })
 export class RoutePlanningService {
   private readonly http = inject(HttpClient);
-  private currentPlan: RoutePlan | null = null;
-  private selectedRiderId: number | null = null;
-
-  get plan(): RoutePlan | null {
-    return this.currentPlan;
-  }
-
-  get selectedRoute(): RiderRoute | null {
-    return this.currentPlan?.routes.find(route => route.riderId === this.selectedRiderId)
-      ?? this.currentPlan?.routes[0]
-      ?? null;
-  }
-
-  setPlan(plan: RoutePlan): void {
-    this.currentPlan = plan;
-    this.selectedRiderId = plan.routes[0]?.riderId ?? null;
-  }
-
-  clearPlan(): void {
-    this.currentPlan = null;
-    this.selectedRiderId = null;
-  }
-
-  selectRider(riderId: number): void {
-    if (this.currentPlan?.routes.some(route => route.riderId === riderId)) {
-      this.selectedRiderId = riderId;
-    }
-  }
 
   getRoadRoute(
     origin: { latitude: number; longitude: number },
@@ -83,7 +51,7 @@ export class RoutePlanningService {
     return this.http.get<OsrmRouteResponse>(url).pipe(map(response => {
       const roadRoute = response.routes?.[0];
       if (response.code !== 'Ok' || !roadRoute || roadRoute.geometry.coordinates.length === 0) {
-        throw new Error(response.message || 'OSRM ไม่สามารถหาเส้นทางบนถนนได้');
+        throw new Error(response.message || 'ไม่สามารถหาเส้นทางบนถนนได้');
       }
 
       return {
@@ -118,7 +86,7 @@ export class RoutePlanningService {
         distances.length !== expectedSize ||
         distances.some(row => row.length !== expectedSize ||
           row.some(distance => distance === null || !Number.isFinite(distance)))) {
-        throw new Error(response.message || 'OSRM ไม่สามารถคำนวณระยะทางระหว่างออเดอร์ได้');
+        throw new Error(response.message || 'ไม่สามารถคำนวณระยะทางระหว่างจุดส่งได้');
       }
 
       return distances.map(row => row.map(distance => Number(distance)));

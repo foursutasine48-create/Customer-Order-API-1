@@ -132,10 +132,7 @@ export class RiderMapComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     const points: L.LatLngTuple[] = [SHOP_CENTER];
-    L.marker(SHOP_CENTER)
-      .bindPopup('จุดเริ่มต้น: ร้าน')
-      .addTo(routeLayer);
-
+    L.marker(SHOP_CENTER).bindPopup('จุดเริ่มต้น: ร้าน').addTo(routeLayer);
     validStops.forEach(stop => {
       const position: L.LatLngTuple = [stop.latitude, stop.longitude];
       points.push(position);
@@ -163,12 +160,16 @@ export class RiderMapComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private createGoogleMapsUrl(job: RiderJob): string {
     const validStops = job.orders.filter(stop =>
-      Number.isFinite(stop.latitude) && Number.isFinite(stop.longitude)
+      Number.isFinite(stop.latitude) &&
+      Number.isFinite(stop.longitude) &&
+      stop.latitude >= -90 && stop.latitude <= 90 &&
+      stop.longitude >= -180 && stop.longitude <= 180
     );
     if (validStops.length === 0) return '';
 
-    const destination = validStops[validStops.length - 1];
-    const waypoints = validStops.slice(0, -1)
+    const orderedStops = [...validStops].sort((a, b) => a.stop_sequence - b.stop_sequence);
+    const destination = orderedStops[orderedStops.length - 1];
+    const waypoints = orderedStops.slice(0, -1)
       .map(stop => `${stop.latitude},${stop.longitude}`)
       .join('|');
     const params = new URLSearchParams({

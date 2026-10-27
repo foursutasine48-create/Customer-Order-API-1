@@ -4,8 +4,8 @@ import { OrderComponent } from './components/order/order.component';
 import { RiderComponent } from './components/rider/rider.component';
 import { RiderJobComponent } from './components/rider-job/rider-job.component';
 import { RiderLoginComponent } from './components/rider-login/rider-login.component';
-import { RoutePlanningComponent } from './components/route-planning/route-planning.component';
 import { RiderMapComponent } from './components/rider-map/rider-map.component';
+import { RoutePlanningComponent } from './components/route-planning/route-planning.component';
 
 export const routes: Routes = [
   {
