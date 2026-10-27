@@ -1,0 +1,120 @@
+<main class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">CUSTOMER MANAGEMENT</p>
+      <h1>จัดการข้อมูลลูกค้า</h1>
+      <p class="subtitle">เพิ่ม แก้ไข ค้นหา และดูตำแหน่งบ้านลูกค้าบนแผนที่</p>
+    </div>
+    <div class="count">
+      <strong>{{ customers.length }}</strong>
+      <span>ลูกค้าที่แสดง</span>
+    </div>
+  </header>
+
+  <section class="panel">
+    <h2>{{ editingId === null ? 'เพิ่มลูกค้า' : 'แก้ไขข้อมูลลูกค้า #' + editingId }}</h2>
+    <form (ngSubmit)="save()">
+      <div class="form-grid">
+        <label>ชื่อ *
+          <input name="first_name" [(ngModel)]="form.first_name" required placeholder="ชื่อจริง">
+        </label>
+        <label>นามสกุล *
+          <input name="last_name" [(ngModel)]="form.last_name" required placeholder="นามสกุล">
+        </label>
+        <label>เบอร์โทรศัพท์ *
+          <input name="phone" [(ngModel)]="form.phone" required inputmode="tel" placeholder="08xxxxxxxx">
+        </label>
+        <label class="wide">ที่อยู่
+          <input name="address" [(ngModel)]="form.address" placeholder="บ้านเลขที่ ถนน ตำบล/อำเภอ">
+        </label>
+        <label>Latitude *
+          <input name="latitude" type="number" step="any" [(ngModel)]="form.latitude" placeholder="เช่น 16.245" required>
+        </label>
+        <label>Longitude *
+          <input name="longitude" type="number" step="any" [(ngModel)]="form.longitude" placeholder="เช่น 103.250" required>
+        </label>
+      </div>
+      <div class="form-actions">
+        <button class="primary" type="submit" [disabled]="saving">
+          {{ saving ? 'กำลังบันทึก...' : (editingId === null ? 'เพิ่มลูกค้า' : 'บันทึกการแก้ไข') }}
+        </button>
+        <button class="secondary" type="button" (click)="cancelEdit()">ล้างฟอร์ม</button>
+      </div>
+      <p class="message" *ngIf="message" role="status">{{ message }}</p>
+    </form>
+  </section>
+
+  <section class="panel map-panel">
+    <div class="list-heading">
+      <div>
+        <h2>แผนที่ตำแหน่งลูกค้า</h2>
+        <p class="subtitle">กดหมุดเพื่อดูชื่อ ที่อยู่ เบอร์โทร และเปิดเส้นทางใน Google Maps</p>
+      </div>
+      <span class="map-count">{{ customers.length }} รายการ</span>
+    </div>
+    <div id="customerMap" class="customer-map" aria-label="แผนที่ตำแหน่งลูกค้า"></div>
+    <p class="map-note">หมายเหตุ: ตำแหน่งหมุดมาจาก Latitude และ Longitude ของลูกค้าในฐานข้อมูล</p>
+  </section>
+
+  <section class="panel">
+    <div class="list-heading">
+      <h2>รายชื่อลูกค้า</h2>
+      <input class="search" [(ngModel)]="searchText" (ngModelChange)="search()" name="search"
+        placeholder="ค้นหาบางส่วนของชื่อหรือนามสกุล...">
+    </div>
+
+    <div class="nearby-search">
+      <label>Latitude
+        <input type="number" step="any" [(ngModel)]="searchLatitude" name="searchLatitude">
+      </label>
+      <label>Longitude
+        <input type="number" step="any" [(ngModel)]="searchLongitude" name="searchLongitude">
+      </label>
+      <label>รัศมี (กม.)
+        <input type="number" min="0.1" step="0.1" [(ngModel)]="searchRadiusKm" name="searchRadiusKm">
+      </label>
+      <button class="primary" type="button" (click)="findNearby()">ค้นหาตามรัศมี</button>
+      <button class="secondary" type="button" (click)="showAllCustomers()">แสดงลูกค้าทั้งหมด</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>ชื่อลูกค้า</th>
+            <th>เบอร์โทร</th>
+            <th>ที่อยู่</th>
+            <th>พิกัด</th>
+            <th>ระยะทาง</th>
+            <th>แผนที่</th>
+            <th>จัดการ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let c of filteredCustomers">
+            <td>#{{ c.customer_id }}</td>
+            <td><strong>{{ c.first_name }} {{ c.last_name }}</strong></td>
+            <td>{{ c.phone }}</td>
+            <td>{{ c.address || '—' }}</td>
+            <td>{{ c.latitude ?? '—' }}, {{ c.longitude ?? '—' }}</td>
+            <td>{{ c.distance_km !== undefined ? (c.distance_km + ' กม.') : '—' }}</td>
+            <td>
+              <button class="small map-button" type="button" (click)="viewOnMap(c)">ดูหมุด</button>
+            </td>
+            <td class="actions">
+              <button class="small edit" type="button" (click)="edit(c)">แก้ไข</button>
+              <button class="small delete" type="button" (click)="remove(c)"
+                [disabled]="deletingCustomerId !== null">
+                {{ deletingCustomerId === c.customer_id ? 'กำลังลบ...' : 'ลบ' }}
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="filteredCustomers.length === 0">
+            <td colspan="8" class="empty">ไม่พบข้อมูลลูกค้า</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>

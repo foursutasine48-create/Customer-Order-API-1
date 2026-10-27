@@ -1,0 +1,85 @@
+<main class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">ORDER MANAGEMENT</p>
+      <h1>จัดการออเดอร์</h1>
+      <p class="subtitle">จัดการรายการสั่งซื้อและจำนวนกล่อง พร้อมค้นหาออเดอร์ใกล้พิกัดที่กำหนด</p>
+    </div>
+    <div class="count"><strong>{{ orders.length }}</strong><span>ออเดอร์ทั้งหมด</span></div>
+  </header>
+
+  <section class="panel">
+    <h2>{{ editingId === null ? 'สร้างออเดอร์' : 'แก้ไขจำนวนกล่องของออเดอร์ #' + editingId }}</h2>
+    <form (ngSubmit)="save()">
+      <div class="form-grid">
+        <label class="wide">ลูกค้า *
+          <select name="customer_id" [(ngModel)]="form.customer_id" required [disabled]="customers.length === 0 || editingId !== null">
+            <option [ngValue]="0" disabled>-- เลือกลูกค้า --</option>
+            <option *ngFor="let c of customers" [ngValue]="c.customer_id">
+              #{{ c.customer_id }} — {{ c.first_name }} {{ c.last_name }} ({{ c.phone }})
+            </option>
+          </select>
+        </label>
+        <label>จำนวนข้าวกล่อง *
+          <input type="number" name="box_quantity" [(ngModel)]="form.box_quantity" min="1" step="1" required>
+        </label>
+      </div>
+      <p class="hint" *ngIf="customers.length === 0">ยังไม่มีข้อมูลลูกค้า กรุณาเพิ่มลูกค้าในหน้า Customer ก่อน</p>
+      <div class="form-actions">
+        <button class="primary" type="submit" [disabled]="saving">{{ saving ? 'กำลังบันทึก...' : (editingId === null ? 'สร้างออเดอร์' : 'บันทึกจำนวนกล่อง') }}</button>
+        <button class="secondary" type="button" (click)="cancelEdit()">ล้างฟอร์ม</button>
+      </div>
+      <p class="message" *ngIf="message" role="status">{{ message }}</p>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="list-heading">
+      <h2>รายการออเดอร์</h2>
+      <input class="search" [(ngModel)]="searchText" name="search" placeholder="ค้นหาลูกค้า(ชื่อ)">
+    </div>
+    <div class="order-tools">
+      <button class="primary" type="button" (click)="simulateOrders()" [disabled]="simulating || clearing">{{ simulating ? 'กำลังจำลอง...' : 'จำลองออเดอร์ 20–30 รายการ' }}</button>
+      <button class="danger" type="button" (click)="clearOrders()" [disabled]="clearing || simulating">{{ clearing ? 'กำลังล้าง...' : 'ล้างออเดอร์ทั้งหมด' }}</button>
+    </div>
+    <div class="nearby-search">
+      <label>Latitude
+        <input type="number" step="any" [(ngModel)]="searchLatitude" name="orderSearchLatitude">
+      </label>
+      <label>Longitude
+        <input type="number" step="any" [(ngModel)]="searchLongitude" name="orderSearchLongitude">
+      </label>
+      <label>รัศมี (กม.)
+        <input type="number" min="0.1" step="0.1" [(ngModel)]="searchRadiusKm" name="orderSearchRadiusKm">
+      </label>
+      <button class="primary" type="button" (click)="findNearby()">ค้นหาตามรัศมี</button>
+      <button class="secondary" type="button" (click)="showAllOrders()">แสดงออเดอร์ทั้งหมด</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Order ID</th><th>ลูกค้า</th><th>เบอร์โทร</th><th>วันที่</th><th>จำนวนกล่อง</th><th>สถานะ</th><th>ระยะทาง</th><th>จัดการ</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let o of filteredOrders">
+            <td><strong>#{{ o.order_id }}</strong></td>
+            <td>{{ customerName(o) }}</td>
+            <td>{{ o.phone || '—' }}</td>
+            <td>{{ o.order_date | date:'dd/MM/yyyy' }}</td>
+            <td>{{ o.box_quantity }} กล่อง</td>
+            <td><span class="status" [ngClass]="{
+              'pending': o.status === 'รอดำเนินการ',
+              'shipping': o.status === 'กำลังจัดส่ง',
+              'done': o.status === 'จัดส่งแล้ว',
+              'cancelled': o.status === 'ยกเลิก'
+            }">{{ o.status }}</span></td>
+            <td>{{ o.distance_km !== undefined ? (o.distance_km + ' กม.') : '—' }}</td>
+            <td class="actions">
+              <button class="small edit" type="button" (click)="edit(o)">แก้ไข</button>
+              <button class="small delete" type="button" (click)="remove(o)" [disabled]="deletingOrderId !== null">{{ deletingOrderId === o.order_id ? 'กำลังลบ...' : 'ลบ' }}</button>
+            </td>
+          </tr>
+          <tr *ngIf="filteredOrders.length === 0"><td colspan="8" class="empty">ไม่พบข้อมูลออเดอร์</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>

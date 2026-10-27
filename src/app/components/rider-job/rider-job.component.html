@@ -1,0 +1,38 @@
+<main class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">RIDER JOB</p>
+      <h1>ใบงาน {{ job?.work_no }}</h1>
+      <p class="subtitle">ไรเดอร์: {{ job?.rider_name }}</p>
+    </div>
+    <a routerLink="/rider-login">กลับ</a>
+  </header>
+
+  <p class="message" *ngIf="loading">กำลังโหลดใบงาน...</p>
+  <p class="message" *ngIf="message" role="alert">{{ message }}</p>
+
+  <ng-container *ngIf="job as currentJob">
+    <section class="summary">
+      <div><strong>{{ currentJob.orders.length }}</strong><span>จุดส่ง</span></div>
+      <div><strong>{{ currentJob.total_boxes }}</strong><span>กล่องทั้งหมด</span></div>
+      <div><strong>{{ currentJob.total_distance_km }}</strong><span>กิโลเมตร</span></div>
+      <div><strong>{{ currentJob.total_time_minutes }}</strong><span>นาทีโดยประมาณ</span></div>
+    </section>
+
+    <section class="panel">
+      <h2>ลำดับการจัดส่ง</h2>
+      <article class="stop" *ngFor="let stop of currentJob.orders">
+        <div class="sequence">{{ stop.stop_sequence }}</div>
+        <div class="details">
+          <h3>ออเดอร์ #{{ stop.order_id }} — {{ stop.first_name }} {{ stop.last_name }}</h3>
+          <p>จำนวน {{ stop.box_quantity }} กล่อง</p>
+          <p>โทร {{ stop.phone || 'ไม่มีเบอร์โทร' }}</p>
+          <p>{{ stop.address || 'ไม่มีที่อยู่' }}</p>
+          <p>เวลาถึงโดยประมาณ {{ stop.estimated_time | date:'HH:mm' }}
+            · สถานะ {{ stop.delivery_status || 'รอส่ง' }}</p>
+        </div>
+      </article>
+      <p class="empty" *ngIf="currentJob.orders.length === 0">ใบงานนี้ไม่มีจุดส่ง</p>
+    </section>
+  </ng-container>
+</main>

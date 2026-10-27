@@ -1,0 +1,90 @@
+<main class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">ROUTE PLANNING</p>
+      <h1>วางแผนเส้นทาง</h1>
+      <p class="subtitle">เลือกไรเดอร์และออเดอร์ จากนั้นคำนวณและบันทึกแผนส่ง</p>
+    </div>
+    <a class="secondary link-button" routerLink="/rider-map">เปิดแผนที่ใบงาน</a>
+  </header>
+
+  <section class="panel">
+    <h2>1. เลือกไรเดอร์และออเดอร์</h2>
+    <label class="rider-select">ไรเดอร์
+      <select name="riderId" [(ngModel)]="selectedRiderId">
+        <option [ngValue]="0">-- เลือกไรเดอร์ --</option>
+        <option *ngFor="let rider of availableRiders" [ngValue]="rider.rider_id">
+          #{{ rider.rider_id }} — {{ rider.rider_name }}
+        </option>
+      </select>
+    </label>
+
+    <p class="hint" *ngIf="loading">กำลังโหลดข้อมูล...</p>
+    <p class="hint" *ngIf="!loading && availableRiders.length === 0">
+      ไม่มีไรเดอร์ที่พร้อมรับงาน กรุณาตรวจสถานะในหน้าจัดการไรเดอร์
+    </p>
+    <p class="hint" *ngIf="availableOrders.length === 0">ไม่มีออเดอร์ที่รอจัดส่ง</p>
+
+    <div class="order-list">
+      <label class="order-option" *ngFor="let order of availableOrders">
+        <input type="checkbox"
+          [checked]="routeOrderIds.includes(order.order_id)"
+          [disabled]="!!assignment ||
+            (!routeOrderIds.includes(order.order_id) && routeOrderIds.length >= 3) ||
+            order.latitude === null || order.longitude === null"
+          (change)="toggleOrder(order)">
+        <span>
+          <strong>ออเดอร์ #{{ order.order_id }}</strong>
+          — {{ order.first_name }} {{ order.last_name }}
+          — {{ order.box_quantity }} กล่อง
+          <small>{{ order.address || 'ไม่มีที่อยู่' }}</small>
+        </span>
+      </label>
+    </div>
+    <p class="hint">เลือกได้ไม่เกิน 3 ออเดอร์ต่อไรเดอร์ตามข้อจำกัดของ Backend</p>
+    <div class="actions">
+      <button class="primary" type="button" (click)="calculateRoute()"
+        [disabled]="calculating || routeOrderIds.length === 0">
+        {{ calculating ? 'กำลังคำนวณ...' : 'คำนวณเส้นทาง' }}
+      </button>
+      <button class="secondary" type="button" (click)="clearRoute()">ล้างการเลือก</button>
+    </div>
+  </section>
+
+  <section class="panel" *ngIf="routeOrderIds.length > 0">
+    <h2>2. ตรวจและเลือกลำดับจุดส่ง</h2>
+    <p class="hint">ระยะทางประมาณ {{ estimatedDistanceKm }} กม. เป็นระยะเส้นตรง ไม่ใช่ระยะถนน</p>
+    <ol class="route-list">
+      <li *ngFor="let order of routeOrders; let i = index">
+        <span class="stop-number">{{ i + 1 }}</span>
+        <span class="stop-info">
+          <strong>#{{ order.order_id }} — {{ order.first_name }} {{ order.last_name }}</strong>
+          <small>{{ order.address || 'ไม่มีที่อยู่' }}</small>
+        </span>
+        <span class="stop-actions">
+          <button type="button" class="small secondary" (click)="moveStop(i, -1)"
+            [disabled]="i === 0" aria-label="เลื่อนจุดส่งขึ้น">↑</button>
+          <button type="button" class="small secondary" (click)="moveStop(i, 1)"
+            [disabled]="i === routeOrders.length - 1" aria-label="เลื่อนจุดส่งลง">↓</button>
+        </span>
+      </li>
+    </ol>
+    <button class="primary" type="button" (click)="saveRoute()" [disabled]="saving || !!assignment">
+      {{ saving ? 'กำลังบันทึกแผน...' : (assignment ? 'บันทึกแผนแล้ว' : 'บันทึกและมอบหมายให้ไรเดอร์') }}
+    </button>
+    <p class="warning">การบันทึกจะสร้างแผนใน Backend และเปลี่ยนสถานะออเดอร์/ไรเดอร์ทันที ยังไม่มี API สำหรับแก้หรือลบแผนที่บันทึกแล้ว</p>
+  </section>
+
+  <section class="result" *ngIf="assignment">
+    <div>
+      <p class="eyebrow">SAVED DELIVERY PLAN</p>
+      <h2>ใบงาน {{ assignment.work_no }}</h2>
+      <p>ไรเดอร์ {{ assignment.rider_name }} · {{ assignment.orders.length }} จุดส่ง ·
+        {{ assignment.total_distance_km }} กม.</p>
+    </div>
+    <span class="route-color" [style.backgroundColor]="assignment.route_color"></span>
+    <button class="primary" type="button" (click)="openMap()">เปิดแผนที่เส้นทาง</button>
+  </section>
+
+  <p class="message" *ngIf="message" role="status">{{ message }}</p>
+</main>
