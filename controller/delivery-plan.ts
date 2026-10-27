@@ -259,7 +259,7 @@ router.post("/confirm", async (req, res) => {
       const savedRoutes = [];
 
       for (const route of routes) {
-        const workNo = `JOB-${data.planDate.replace(/-/g, "")}-${randomBytes(4).toString("hex").toUpperCase()}`;
+        const workNo = randomBytes(4).toString("hex").toUpperCase();
         const [routeResult]: any = await connection!.query(
           `INSERT INTO Rider_Route
             (plan_id, rider_id, work_no, route_color, total_distance, total_time, delivery_cost)
@@ -290,8 +290,8 @@ router.post("/confirm", async (req, res) => {
           [stops]
         );
         const [riderUpdate]: any = await connection!.query(
-          "UPDATE Rider SET status = ? WHERE rider_id = ? AND status IN (?, ?)",
-          ["กำลังส่ง", route.rider_id, "ว่าง", "พร้อมรับงาน"]
+          "UPDATE Rider SET status = ? WHERE rider_id = ? AND status = ?",
+          ["กำลังส่ง", route.rider_id, "พร้อมรับงาน"]
         );
         if (riderUpdate.affectedRows !== 1)
           throw new DeliveryPlanError(`สถานะไรเดอร์รหัส ${route.rider_id} เปลี่ยนระหว่างยืนยันแผน`, 409, "RIDER_STATUS_CHANGED");

@@ -4,6 +4,7 @@ import { conn } from "../dbconnect";
 import {
   isAvailableRider,
   MAX_ORDERS_PER_RIDER,
+  RIDER_STATUSES,
   validateRider,
 } from "../model/rider";
 import {
@@ -54,7 +55,7 @@ router.get("/:id", async (req, res) => {
 router.post("/", async (req, res) => {
   const errorMessage = validateRider(req.body);
   if (errorMessage) return res.status(400).json({ message: errorMessage });
-  const { rider_name, phone, status = "ว่าง" } = req.body;
+  const { rider_name, phone, status = "พร้อมรับงาน" } = req.body;
   try {
     const [result]: any = await conn.query(
       "INSERT INTO Rider (rider_name, phone, status) VALUES (?, ?, ?)",
@@ -100,8 +101,11 @@ router.put("/:id", async (req, res) => {
 // PATCH /rider/:id/status
 router.patch("/:id/status", async (req, res) => {
   const { status } = req.body ?? {};
-  if (typeof status !== "string" || !status.trim())
-    return res.status(400).json({ message: "กรุณาระบุสถานะ (status)" });
+  if (
+    typeof status !== "string" ||
+    !(RIDER_STATUSES as readonly string[]).includes(status.trim())
+  )
+    return res.status(400).json({ message: "สถานะไม่ถูกต้อง (status)" });
   try {
     const [result]: any = await conn.query(
       "UPDATE Rider SET status = ? WHERE rider_id = ?",
@@ -229,7 +233,7 @@ router.post("/:id/assignments", async (req, res) => {
     );
     const planId = planResult.insertId;
     const workNo = requestedWorkNo?.trim()
-      ?? `JOB-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
+      ?? randomBytes(4).toString("hex").toUpperCase();
     const color = plannedRoute.route_color;
 
     const [routeResult]: any = await connection.query(
