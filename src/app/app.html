@@ -1,0 +1,57 @@
+<div class="app-layout">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">🍱</div>
+      <div>
+        <h2>LunchFlow</h2>
+        <p>Delivery Management</p>
+      </div>
+    </div>
+
+    <div class="menu-title">เมนูหลัก</div>
+
+    <nav class="menu">
+      <a routerLink="/customers"
+         routerLinkActive="active"
+         class="menu-item">
+        <span class="menu-icon">👥</span>
+        <span>จัดการลูกค้า</span>
+      </a>
+
+      <a routerLink="/orders"
+         routerLinkActive="active"
+         class="menu-item">
+        <span class="menu-icon">📦</span>
+        <span>จัดการออเดอร์</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="admin-avatar">A</div>
+      <div>
+        <strong>ผู้ดูแลระบบ</strong>
+        <p>Administrator</p>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main-area">
+    <header class="topbar">
+      <div>
+        <h3>ระบบจัดการร้านอาหาร</h3>
+        <p>ระบบจัดการลูกค้าและออเดอร์จัดส่ง</p>
+      </div>
+
+      <div class="topbar-right">
+        <span class="online-dot"></span>
+        <span>ระบบพร้อมใช้งาน</span>
+      </div>
+    </header>
+
+    <section class="content">
+      <router-outlet></router-outlet>
+    </section>
+  </div>
+
+</div>
